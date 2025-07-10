@@ -1,0 +1,91 @@
+# API Server MemGOS Configuration Example
+
+# User and session configuration
+user_id: "api-user"
+session_id: "api-session"
+
+# Memory feature flags
+enable_textual_memory: true
+enable_activation_memory: true
+enable_parametric_memory: true
+enable_mem_scheduler: true
+
+# Search configuration
+top_k: 10
+
+# Logging configuration
+log_level: "info"
+log_file: "logs/memgos.log"
+
+# Metrics and monitoring
+metrics_enabled: true
+metrics_port: 9090
+health_check_enabled: true
+health_check_port: 8080
+
+# API server configuration (if running as API)
+api:
+  host: "0.0.0.0"
+  port: 8000
+  tls_enabled: false
+  cors_enabled: true
+  cors_origins: ["*"]
+  rate_limit: 100
+  timeout: "30s"
+  jwt_secret: "${JWT_SECRET}"
+
+# Chat model configuration
+chat_model:
+  backend: "openai"
+  model: "gpt-4"
+  api_key: "${OPENAI_API_KEY}"
+  max_tokens: 2048
+  temperature: 0.7
+  timeout: "60s"
+
+# Memory reader configuration
+mem_reader:
+  backend: "tree_text"
+  memory_filename: "textual_memory.json"
+  top_k: 10
+  chunk_size: 1500
+  chunk_overlap: 300
+  
+  # Embedder configuration
+  embedder:
+    backend: "openai"
+    model: "text-embedding-ada-002"
+    api_key: "${OPENAI_API_KEY}"
+    dimension: 1536
+    timeout: "30s"
+  
+  # Vector database configuration
+  vector_db:
+    backend: "qdrant"
+    host: "localhost"
+    port: 6333
+    api_key: "${QDRANT_API_KEY}"
+    collection: "memories"
+    dimension: 1536
+    timeout: "30s"
+  
+  # Graph database configuration (optional)
+  graph_db:
+    backend: "neo4j"
+    uri: "bolt://localhost:7687"
+    username: "neo4j"
+    password: "${NEO4J_PASSWORD}"
+    database: "neo4j"
+    timeout: "30s"
+
+# Memory scheduler configuration
+mem_scheduler:
+  enabled: true
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_password: "${REDIS_PASSWORD}"
+  redis_db: 0
+  worker_count: 4
+  queue_size: 1000
+  retry_attempts: 3
+  retry_delay: "5s"

@@ -1,0 +1,56 @@
+# Simple MemGOS Configuration Example
+
+# User and session configuration
+user_id: "default-user"
+session_id: "session-001"
+
+# Memory feature flags
+enable_textual_memory: true
+enable_activation_memory: false
+enable_parametric_memory: false
+enable_mem_scheduler: false
+
+# Search configuration
+top_k: 5
+
+# Logging configuration
+log_level: "info"
+log_file: ""  # Empty means stdout
+
+# Metrics and monitoring
+metrics_enabled: true
+metrics_port: 9090
+health_check_enabled: true
+health_check_port: 8080
+
+# Chat model configuration
+chat_model:
+  backend: "openai"
+  model: "gpt-3.5-turbo"
+  api_key: "${OPENAI_API_KEY}"  # Set via environment variable
+  max_tokens: 1024
+  temperature: 0.7
+  timeout: "30s"
+
+# Memory reader configuration
+mem_reader:
+  backend: "general"
+  memory_filename: "textual_memory.json"
+  top_k: 5
+  chunk_size: 1000
+  chunk_overlap: 200
+  
+  # Embedder configuration for semantic search
+  embedder:
+    backend: "openai"
+    model: "text-embedding-ada-002"
+    api_key: "${OPENAI_API_KEY}"
+    timeout: "30s"
+  
+  # Vector database configuration (optional)
+  vector_db:
+    backend: "qdrant"
+    host: "localhost"
+    port: 6333
+    collection: "memories"
+    dimension: 1536
