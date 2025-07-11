@@ -18,6 +18,7 @@ require (
 	// User management dependencies
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
+	github.com/kuzudb/go-kuzu v0.10.0
 
 	// Text processing dependencies
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
@@ -27,7 +28,6 @@ require (
 
 	// Graph database dependencies
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.1
-	github.com/kuzudb/go-kuzu v0.10.0
 	github.com/sashabaranov/go-openai v1.40.4
 
 	// Configuration and validation
@@ -43,8 +43,11 @@ require (
 require (
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
+	github.com/mark3labs/mcp-go v0.33.0
 	github.com/qdrant/go-client v1.14.1
 	github.com/redis/go-redis/v9 v9.11.0
+	github.com/swaggo/files v1.0.1
+	github.com/swaggo/gin-swagger v1.6.0
 	github.com/swaggo/swag v1.16.4
 	google.golang.org/grpc v1.73.0
 )
@@ -78,7 +81,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
-	github.com/mark3labs/mcp-go v0.33.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -94,8 +96,6 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/swaggo/files v1.0.1 // indirect
-	github.com/swaggo/gin-swagger v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

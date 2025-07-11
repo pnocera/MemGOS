@@ -3,6 +3,8 @@ package chunkers
 import (
 	"fmt"
 	"strings"
+	
+	"github.com/memtensor/memgos/pkg/interfaces"
 )
 
 // ChunkerFactory provides a factory for creating different types of chunkers
@@ -41,6 +43,25 @@ func (cf *ChunkerFactory) CreateChunker(chunkerType ChunkerType, config *Chunker
 	case ChunkerTypeRecursive:
 		return NewRecursiveChunker(config)
 	
+	case ChunkerTypeContextual:
+		// Contextual chunker requires LLM provider - return error with guidance
+		return nil, fmt.Errorf("contextual chunker requires LLM provider, use CreateContextualChunker() instead")
+	
+	case ChunkerTypePropositionalization:
+		// Propositionalization chunker requires LLM provider - return error with guidance
+		return nil, fmt.Errorf("propositionalization chunker requires LLM provider, use CreatePropositionalizationChunker() instead")
+	
+	case ChunkerTypeAgentic:
+		// Agentic chunker requires LLM provider - return error with guidance
+		return nil, fmt.Errorf("agentic chunker requires LLM provider, use CreateAgenticChunker() instead")
+	
+	case ChunkerTypeMultiModal:
+		return NewMultiModalChunker(config)
+	
+	case ChunkerTypeHierarchical:
+		// Hierarchical chunker optionally uses LLM provider - return error with guidance
+		return nil, fmt.Errorf("hierarchical chunker optionally uses LLM provider, use CreateHierarchicalChunker() instead")
+	
 	default:
 		return nil, fmt.Errorf("chunker type %s is not implemented yet", chunkerType)
 	}
@@ -62,6 +83,16 @@ func (cf *ChunkerFactory) CreateChunkerFromString(chunkerTypeName string, config
 		chunkerType = ChunkerTypeFixed
 	case "recursive":
 		chunkerType = ChunkerTypeRecursive
+	case "contextual":
+		chunkerType = ChunkerTypeContextual
+	case "propositionalization":
+		chunkerType = ChunkerTypePropositionalization
+	case "agentic":
+		chunkerType = ChunkerTypeAgentic
+	case "multimodal", "multi-modal":
+		chunkerType = ChunkerTypeMultiModal
+	case "hierarchical":
+		chunkerType = ChunkerTypeHierarchical
 	default:
 		return nil, fmt.Errorf("unknown chunker type: %s", chunkerTypeName)
 	}
@@ -269,5 +300,161 @@ func (cf *ChunkerFactory) GetChunkerDescriptors() []ChunkerDescriptor {
 				"Technical manuals",
 			},
 		},
+		{
+			Type:        ChunkerTypeContextual,
+			Name:        "Contextual Chunker",
+			Description: "Anthropic-style chunking with LLM-generated contextual descriptions",
+			Features: []string{
+				"LLM-powered context generation",
+				"Document-level context awareness",
+				"Semantic metadata enrichment",
+				"Enhanced retrieval quality",
+			},
+			UseCases: []string{
+				"Advanced RAG systems",
+				"Knowledge base construction",
+				"Context-aware search",
+				"Document analysis",
+			},
+		},
+		{
+			Type:        ChunkerTypePropositionalization,
+			Name:        "Propositionalization Chunker",
+			Description: "Extracts atomic propositions for complex reasoning tasks",
+			Features: []string{
+				"Atomic proposition extraction",
+				"Self-contained semantic units",
+				"LLM-powered validation",
+				"Deduplication and filtering",
+			},
+			UseCases: []string{
+				"Fact extraction",
+				"Knowledge graphs",
+				"Logical reasoning",
+				"Information verification",
+			},
+		},
+		{
+			Type:        ChunkerTypeAgentic,
+			Name:        "Agentic Chunker",
+			Description: "LLM-driven chunking with AI decision-making for optimal boundaries",
+			Features: []string{
+				"LLM-powered boundary detection",
+				"Multi-round reasoning",
+				"Document type adaptation",
+				"Confidence-based decisions",
+				"Human-like processing patterns",
+			},
+			UseCases: []string{
+				"High-quality document processing",
+				"Adaptive content analysis",
+				"Context-aware chunking",
+				"Premium RAG systems",
+			},
+		},
+		{
+			Type:        ChunkerTypeMultiModal,
+			Name:        "Multi-Modal Chunker",
+			Description: "Handles documents with mixed content types including text, code, tables, and images",
+			Features: []string{
+				"Mixed content detection",
+				"Code block preservation",
+				"Table structure handling",
+				"Image reference processing",
+				"Format-aware chunking",
+			},
+			UseCases: []string{
+				"Technical documentation",
+				"Research papers",
+				"Mixed-format documents",
+				"Web content processing",
+			},
+		},
+		{
+			Type:        ChunkerTypeHierarchical,
+			Name:        "Hierarchical Chunker",
+			Description: "Creates hierarchical chunk relationships with parent-child structure and summaries",
+			Features: []string{
+				"Multi-level hierarchy",
+				"Parent-child relationships",
+				"Automatic summarization",
+				"Cross-reference tracking",
+				"Structure preservation",
+			},
+			UseCases: []string{
+				"Document navigation",
+				"Structured knowledge bases",
+				"Multi-level summaries",
+				"Complex document analysis",
+			},
+		},
+	}
+}
+
+// CreateContextualChunker creates a contextual chunker with LLM provider
+func (cf *ChunkerFactory) CreateContextualChunker(config *ChunkerConfig, llmProvider interfaces.LLM) (Chunker, error) {
+	if llmProvider == nil {
+		return nil, fmt.Errorf("LLM provider is required for contextual chunker")
+	}
+	
+	return NewContextualChunker(config, llmProvider)
+}
+
+// CreatePropositionalizationChunker creates a propositionalization chunker with LLM provider
+func (cf *ChunkerFactory) CreatePropositionalizationChunker(config *ChunkerConfig, llmProvider interfaces.LLM) (Chunker, error) {
+	if llmProvider == nil {
+		return nil, fmt.Errorf("LLM provider is required for propositionalization chunker")
+	}
+	
+	return NewPropositionalizationChunker(config, llmProvider)
+}
+
+// CreateAgenticChunker creates an agentic chunker with LLM provider
+func (cf *ChunkerFactory) CreateAgenticChunker(config *ChunkerConfig, llmProvider interfaces.LLM) (Chunker, error) {
+	if llmProvider == nil {
+		return nil, fmt.Errorf("LLM provider is required for agentic chunker")
+	}
+	
+	return NewAgenticChunker(config, llmProvider)
+}
+
+// CreateMultiModalChunker creates a multi-modal chunker
+func (cf *ChunkerFactory) CreateMultiModalChunker(config *ChunkerConfig) (Chunker, error) {
+	return NewMultiModalChunker(config)
+}
+
+// CreateHierarchicalChunker creates a hierarchical chunker with optional LLM provider
+func (cf *ChunkerFactory) CreateHierarchicalChunker(config *ChunkerConfig, llmProvider interfaces.LLM) (Chunker, error) {
+	return NewHierarchicalChunker(config, llmProvider)
+}
+
+// CreateAdvancedChunker creates chunkers that require additional dependencies
+func (cf *ChunkerFactory) CreateAdvancedChunker(chunkerType ChunkerType, config *ChunkerConfig, llmProvider interfaces.LLM) (Chunker, error) {
+	if config == nil {
+		config = DefaultChunkerConfig()
+	}
+	
+	// Validate chunker type
+	if !IsValidChunkerType(chunkerType) {
+		return nil, fmt.Errorf("unsupported chunker type: %s. Supported types: %v", 
+			chunkerType, SupportedChunkerTypes())
+	}
+	
+	switch chunkerType {
+	case ChunkerTypeContextual:
+		return cf.CreateContextualChunker(config, llmProvider)
+	
+	case ChunkerTypePropositionalization:
+		return cf.CreatePropositionalizationChunker(config, llmProvider)
+	
+	case ChunkerTypeAgentic:
+		return cf.CreateAgenticChunker(config, llmProvider)
+	
+	case ChunkerTypeHierarchical:
+		return cf.CreateHierarchicalChunker(config, llmProvider)
+	
+	default:
+		// For standard chunkers, use the regular factory method
+		return cf.CreateChunker(chunkerType, config)
 	}
 }

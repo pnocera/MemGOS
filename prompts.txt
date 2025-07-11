@@ -16,3 +16,5 @@ Goal: provide a self-documenting MCP server using github.com/mark3labs/mcp-go. o
 ./claude-flow hive-mind spawn "The goal is to provide docker files for the memgos and memgos-mcp servers, and update the documentation and README.md file. open a github issue in https://github.com/pnocera/MemGOS repo.don't forget to update the issue with each agent reports during the process." --claude
 
 New Goal : completely replace Neo4j with kuzudb https://github.com/kuzudb/kuzu github.com/kuzudb/go-kuzu . open a github issue in https://github.com/pnocera/MemGOS repo.don't forget to update the issue with each agent reports during the process.
+
+./claude-flow hive-mind spawn "Goal: Do some research to find better chunking algorithms and techniques. the actual ./pkg/chunkers provided are not very strong. libraries like https://github.com/mirth/chonky provides better semantic features. elaborate a plan for the implementation . Open a github issue in https://github.com/pnocera/MemGOS repo . let each agent report in this github issue after each action." --claude

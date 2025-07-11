@@ -19,7 +19,10 @@ type SentenceChunker struct {
 	// sentenceBoundaryRegex for detecting sentence boundaries
 	sentenceBoundaryRegex *regexp.Regexp
 	
-	// Simple token estimation function (approximation)
+	// Advanced tokenizer for accurate token counting
+	tokenizer TokenizerProvider
+	
+	// Fallback token estimation function (approximation)
 	tokenEstimator func(string) int
 }
 
@@ -35,9 +38,20 @@ func NewSentenceChunker(config *ChunkerConfig) (*SentenceChunker, error) {
 		return nil, fmt.Errorf("failed to compile sentence boundary regex: %w", err)
 	}
 	
+	// Initialize advanced tokenizer
+	tokenizerFactory := NewTokenizerFactory()
+	tokenizerConfig := DefaultTokenizerConfig()
+	tokenizer, err := tokenizerFactory.CreateTokenizer(tokenizerConfig)
+	if err != nil {
+		// If advanced tokenizer fails, log warning and use fallback
+		fmt.Printf("Warning: failed to create advanced tokenizer, using fallback: %v\n", err)
+		tokenizer = nil
+	}
+	
 	chunker := &SentenceChunker{
 		config:                config,
 		sentenceBoundaryRegex: sentenceRegex,
+		tokenizer:             tokenizer,
 		tokenEstimator:        defaultTokenEstimator,
 	}
 	
@@ -287,6 +301,17 @@ func (sc *SentenceChunker) findTextPosition(text, sentence string) int {
 
 // EstimateTokens estimates the number of tokens in text
 func (sc *SentenceChunker) EstimateTokens(text string) int {
+	// Use advanced tokenizer if available
+	if sc.tokenizer != nil {
+		count, err := sc.tokenizer.CountTokens(text)
+		if err == nil {
+			return count
+		}
+		// Log error but continue with fallback
+		fmt.Printf("Warning: advanced tokenizer failed, using fallback: %v\n", err)
+	}
+	
+	// Fall back to simple estimation
 	return sc.tokenEstimator(text)
 }
 

@@ -8,13 +8,23 @@ import (
 )
 
 // SemanticChunker implements semantic-aware text chunking
-// This is a simplified implementation that uses sentence boundaries
-// with semantic heuristics. A full implementation would use
-// transformer models for semantic similarity
+// This implementation uses embeddings for semantic similarity analysis
 type SemanticChunker struct {
 	config *ChunkerConfig
 	
-	// Token estimation function
+	// Embedding provider for semantic analysis
+	embeddingProvider EmbeddingProvider
+	
+	// Tokenizer for accurate token counting
+	tokenizer TokenizerProvider
+	
+	// Similarity calculator for boundary detection
+	similarityCalculator SimilarityCalculator
+	
+	// Boundary detector for semantic boundaries
+	boundaryDetector SemanticBoundaryDetector
+	
+	// Fallback token estimation function
 	tokenEstimator func(string) int
 	
 	// Sentence chunker for initial splitting
@@ -33,10 +43,38 @@ func NewSemanticChunker(config *ChunkerConfig) (*SemanticChunker, error) {
 		return nil, fmt.Errorf("failed to create sentence chunker: %w", err)
 	}
 	
+	// Initialize embedding provider
+	embeddingFactory := NewEmbeddingFactory(NewMemoryEmbeddingCache(1000))
+	embeddingConfig := DefaultEmbeddingConfig()
+	embeddingProvider, err := embeddingFactory.CreateProvider(embeddingConfig)
+	if err != nil {
+		// Log warning but continue with basic semantic chunking
+		fmt.Printf("Warning: failed to create embedding provider, using basic semantic analysis: %v\n", err)
+		embeddingProvider = nil
+	}
+	
+	// Initialize tokenizer
+	tokenizerFactory := NewTokenizerFactory()
+	tokenizerConfig := DefaultTokenizerConfig()
+	tokenizer, err := tokenizerFactory.CreateTokenizer(tokenizerConfig)
+	if err != nil {
+		// Log warning but continue with fallback
+		fmt.Printf("Warning: failed to create tokenizer, using fallback: %v\n", err)
+		tokenizer = nil
+	}
+	
+	// Initialize similarity calculator and boundary detector
+	similarityCalculator := NewCosineSimilarityCalculator()
+	boundaryDetector := NewCosineSemanticBoundaryDetector()
+	
 	chunker := &SemanticChunker{
-		config:          config,
-		tokenEstimator:  defaultTokenEstimator,
-		sentenceChunker: sentenceChunker,
+		config:               config,
+		embeddingProvider:    embeddingProvider,
+		tokenizer:            tokenizer,
+		similarityCalculator: similarityCalculator,
+		boundaryDetector:     boundaryDetector,
+		tokenEstimator:       defaultTokenEstimator,
+		sentenceChunker:      sentenceChunker,
 	}
 	
 	return chunker, nil
@@ -141,10 +179,56 @@ func (sc *SemanticChunker) isSemanticBoundary(currentSentences []string, nextSen
 		return false
 	}
 	
-	lastSentence := currentSentences[len(currentSentences)-1]
+	// Use embedding-based boundary detection if available
+	if sc.embeddingProvider != nil && sc.boundaryDetector != nil {
+		return sc.isEmbeddingBasedBoundary(currentSentences, nextSentence)
+	}
 	
-	// Simple heuristics for semantic boundaries
-	// In a real implementation, you'd use embedding similarity
+	// Fallback to heuristic-based detection
+	return sc.isHeuristicBoundary(currentSentences, nextSentence)
+}
+
+// isEmbeddingBasedBoundary uses embeddings to detect semantic boundaries
+func (sc *SemanticChunker) isEmbeddingBasedBoundary(currentSentences []string, nextSentence string) bool {
+	ctx := context.Background()
+	
+	// Get embeddings for the current chunk and next sentence
+	currentText := strings.Join(currentSentences, " ")
+	
+	currentEmbedding, err := sc.embeddingProvider.GetEmbedding(ctx, currentText)
+	if err != nil {
+		// Fallback to heuristic method on error
+		return sc.isHeuristicBoundary(currentSentences, nextSentence)
+	}
+	
+	nextEmbedding, err := sc.embeddingProvider.GetEmbedding(ctx, nextSentence)
+	if err != nil {
+		// Fallback to heuristic method on error
+		return sc.isHeuristicBoundary(currentSentences, nextSentence)
+	}
+	
+	// Calculate similarity
+	similarity, err := sc.similarityCalculator.CosineSimilarity(currentEmbedding, nextEmbedding)
+	if err != nil {
+		// Fallback to heuristic method on error
+		return sc.isHeuristicBoundary(currentSentences, nextSentence)
+	}
+	
+	// Use adaptive threshold based on the boundary detector
+	embeddings := [][]float64{currentEmbedding, nextEmbedding}
+	threshold, err := sc.boundaryDetector.CalculateOptimalThreshold(embeddings, ThresholdMethodStdDev)
+	if err != nil {
+		// Use default threshold if calculation fails
+		threshold = 0.7
+	}
+	
+	// Boundary detected if similarity is below threshold
+	return similarity < threshold
+}
+
+// isHeuristicBoundary uses heuristic rules for boundary detection
+func (sc *SemanticChunker) isHeuristicBoundary(currentSentences []string, nextSentence string) bool {
+	lastSentence := currentSentences[len(currentSentences)-1]
 	
 	// Check for topic transition indicators
 	topicTransitionIndicators := []string{
@@ -268,6 +352,22 @@ func (sc *SemanticChunker) calculateSemanticOverlap(currentSentences []string, n
 
 // areSemanticallySimilar checks if two sentences are semantically similar
 func (sc *SemanticChunker) areSemanticallySimilar(sentence1, sentence2 string) bool {
+	// Use embedding-based similarity if available
+	if sc.embeddingProvider != nil && sc.similarityCalculator != nil {
+		ctx := context.Background()
+		
+		emb1, err1 := sc.embeddingProvider.GetEmbedding(ctx, sentence1)
+		emb2, err2 := sc.embeddingProvider.GetEmbedding(ctx, sentence2)
+		
+		if err1 == nil && err2 == nil {
+			similarity, err := sc.similarityCalculator.CosineSimilarity(emb1, emb2)
+			if err == nil {
+				return similarity > 0.3 // Threshold for similarity
+			}
+		}
+	}
+	
+	// Fallback to word overlap method
 	words1 := sc.extractContentWords(sentence1)
 	words2 := sc.extractContentWords(sentence2)
 	
@@ -329,12 +429,59 @@ func (sc *SemanticChunker) createSemanticChunk(sentences []string, originalText 
 	return chunk
 }
 
-// calculateSemanticCoherence calculates a simple coherence score for the chunk
+// calculateSemanticCoherence calculates a coherence score for the chunk using embeddings
 func (sc *SemanticChunker) calculateSemanticCoherence(sentences []string) float64 {
 	if len(sentences) <= 1 {
 		return 1.0
 	}
 	
+	// Use embedding-based coherence if available
+	if sc.embeddingProvider != nil {
+		return sc.calculateEmbeddingCoherence(sentences)
+	}
+	
+	// Fallback to word-based coherence
+	return sc.calculateWordBasedCoherence(sentences)
+}
+
+// calculateEmbeddingCoherence calculates coherence using embeddings
+func (sc *SemanticChunker) calculateEmbeddingCoherence(sentences []string) float64 {
+	ctx := context.Background()
+	
+	// Get embeddings for all sentences
+	embeddings := make([][]float64, len(sentences))
+	for i, sentence := range sentences {
+		emb, err := sc.embeddingProvider.GetEmbedding(ctx, sentence)
+		if err != nil {
+			// Fallback to word-based coherence on error
+			return sc.calculateWordBasedCoherence(sentences)
+		}
+		embeddings[i] = emb
+	}
+	
+	// Calculate average pairwise similarity
+	totalSimilarity := 0.0
+	comparisons := 0
+	
+	for i := 0; i < len(embeddings); i++ {
+		for j := i + 1; j < len(embeddings); j++ {
+			sim, err := sc.similarityCalculator.CosineSimilarity(embeddings[i], embeddings[j])
+			if err == nil {
+				totalSimilarity += sim
+				comparisons++
+			}
+		}
+	}
+	
+	if comparisons == 0 {
+		return 1.0
+	}
+	
+	return totalSimilarity / float64(comparisons)
+}
+
+// calculateWordBasedCoherence calculates coherence using word overlap
+func (sc *SemanticChunker) calculateWordBasedCoherence(sentences []string) float64 {
 	totalSimilarity := 0.0
 	comparisons := 0
 	
@@ -397,6 +544,17 @@ func (sc *SemanticChunker) findTextPosition(text, sentence string, startFrom int
 
 // EstimateTokens estimates the number of tokens in text
 func (sc *SemanticChunker) EstimateTokens(text string) int {
+	// Use advanced tokenizer if available
+	if sc.tokenizer != nil {
+		count, err := sc.tokenizer.CountTokens(text)
+		if err == nil {
+			return count
+		}
+		// Log error but continue with fallback
+		fmt.Printf("Warning: advanced tokenizer failed, using fallback: %v\n", err)
+	}
+	
+	// Fall back to simple estimation
 	return sc.tokenEstimator(text)
 }
 

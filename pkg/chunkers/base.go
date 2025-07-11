@@ -108,6 +108,21 @@ const (
 	
 	// ChunkerTypeRecursive recursively splits text preserving structure
 	ChunkerTypeRecursive ChunkerType = "recursive"
+	
+	// ChunkerTypeContextual splits text with LLM-generated contextual descriptions
+	ChunkerTypeContextual ChunkerType = "contextual"
+	
+	// ChunkerTypePropositionalization extracts atomic propositions from text
+	ChunkerTypePropositionalization ChunkerType = "propositionalization"
+	
+	// ChunkerTypeAgentic uses LLM-driven decision making for chunk boundaries
+	ChunkerTypeAgentic ChunkerType = "agentic"
+	
+	// ChunkerTypeMultiModal handles documents with mixed content types
+	ChunkerTypeMultiModal ChunkerType = "multimodal"
+	
+	// ChunkerTypeHierarchical creates hierarchical chunk relationships
+	ChunkerTypeHierarchical ChunkerType = "hierarchical"
 )
 
 // SupportedChunkerTypes returns all supported chunker types
@@ -118,6 +133,11 @@ func SupportedChunkerTypes() []ChunkerType {
 		ChunkerTypeSemantic,
 		ChunkerTypeFixed,
 		ChunkerTypeRecursive,
+		ChunkerTypeContextual,
+		ChunkerTypePropositionalization,
+		ChunkerTypeAgentic,
+		ChunkerTypeMultiModal,
+		ChunkerTypeHierarchical,
 	}
 }
 
