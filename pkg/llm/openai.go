@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avast/retry-go"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-resty/resty/v2"
 	"github.com/sashabaranov/go-openai"
-	"github.com/cenkalti/backoff/v4"
-	"github.com/avast/retry-go"
 
 	"github.com/memtensor/memgos/pkg/types"
 )
@@ -18,8 +18,8 @@ import (
 // OpenAILLM implements the LLM interface for OpenAI models
 type OpenAILLM struct {
 	*BaseLLM
-	client    *openai.Client
-	config    *LLMConfig
+	client     *openai.Client
+	config     *LLMConfig
 	httpClient *resty.Client
 }
 
@@ -28,44 +28,44 @@ func NewOpenAILLM(config *LLMConfig) (LLMProvider, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
-	
+
 	if config.APIKey == "" {
 		return nil, fmt.Errorf("OpenAI API key is required")
 	}
-	
+
 	// Create OpenAI client
 	openaiConfig := openai.DefaultConfig(config.APIKey)
 	if config.BaseURL != "" {
 		openaiConfig.BaseURL = config.BaseURL
 	}
-	
+
 	client := openai.NewClientWithConfig(openaiConfig)
-	
+
 	// Create HTTP client for custom requests
 	httpClient := resty.New()
 	httpClient.SetTimeout(config.Timeout)
 	httpClient.SetRetryCount(3)
 	httpClient.SetRetryWaitTime(1 * time.Second)
 	httpClient.SetRetryMaxWaitTime(5 * time.Second)
-	
+
 	// Set headers
 	httpClient.SetHeader("Authorization", "Bearer "+config.APIKey)
 	httpClient.SetHeader("Content-Type", "application/json")
 	httpClient.SetHeader("User-Agent", "MemGOS/1.0")
-	
+
 	llm := &OpenAILLM{
 		BaseLLM:    NewBaseLLM(config.Model),
 		client:     client,
 		config:     config,
 		httpClient: httpClient,
 	}
-	
+
 	// Apply configuration
 	llm.SetMaxTokens(config.MaxTokens)
 	llm.SetTemperature(config.Temperature)
 	llm.SetTopP(config.TopP)
 	llm.SetTimeout(config.Timeout)
-	
+
 	return llm, nil
 }
 
@@ -74,7 +74,7 @@ func (o *OpenAILLM) Generate(ctx context.Context, messages types.MessageList) (s
 	if err := o.ValidateMessages(messages); err != nil {
 		return "", fmt.Errorf("invalid messages: %w", err)
 	}
-	
+
 	// Convert messages to OpenAI format
 	openaiMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, msg := range messages {
@@ -83,7 +83,7 @@ func (o *OpenAILLM) Generate(ctx context.Context, messages types.MessageList) (s
 			Content: msg.Content,
 		}
 	}
-	
+
 	// Create request
 	req := openai.ChatCompletionRequest{
 		Model:       o.GetModelName(),
@@ -93,11 +93,11 @@ func (o *OpenAILLM) Generate(ctx context.Context, messages types.MessageList) (s
 		TopP:        float32(o.GetTopP()),
 		Stream:      false,
 	}
-	
+
 	// Make request with retry
 	var resp openai.ChatCompletionResponse
 	var err error
-	
+
 	err = retry.Do(
 		func() error {
 			resp, err = o.client.CreateChatCompletion(ctx, req)
@@ -107,21 +107,21 @@ func (o *OpenAILLM) Generate(ctx context.Context, messages types.MessageList) (s
 		retry.Delay(time.Second),
 		retry.DelayType(retry.BackOffDelay),
 	)
-	
+
 	if err != nil {
 		return "", fmt.Errorf("OpenAI API request failed: %w", err)
 	}
-	
+
 	if len(resp.Choices) == 0 {
 		return "", fmt.Errorf("no response choices returned")
 	}
-	
+
 	// Record metrics
 	o.RecordMetrics("tokens_used", resp.Usage.TotalTokens)
 	o.RecordMetrics("prompt_tokens", resp.Usage.PromptTokens)
 	o.RecordMetrics("completion_tokens", resp.Usage.CompletionTokens)
 	o.RecordMetrics("model", resp.Model)
-	
+
 	return resp.Choices[0].Message.Content, nil
 }
 
@@ -137,7 +137,7 @@ func (o *OpenAILLM) GenerateStream(ctx context.Context, messages types.MessageLi
 	if err := o.ValidateMessages(messages); err != nil {
 		return fmt.Errorf("invalid messages: %w", err)
 	}
-	
+
 	// Convert messages to OpenAI format
 	openaiMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, msg := range messages {
@@ -146,7 +146,7 @@ func (o *OpenAILLM) GenerateStream(ctx context.Context, messages types.MessageLi
 			Content: msg.Content,
 		}
 	}
-	
+
 	// Create streaming request
 	req := openai.ChatCompletionRequest{
 		Model:       o.GetModelName(),
@@ -156,14 +156,14 @@ func (o *OpenAILLM) GenerateStream(ctx context.Context, messages types.MessageLi
 		TopP:        float32(o.GetTopP()),
 		Stream:      true,
 	}
-	
+
 	// Create streaming response
 	streamResp, err := o.client.CreateChatCompletionStream(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to create streaming response: %w", err)
 	}
 	defer streamResp.Close()
-	
+
 	// Read stream
 	for {
 		response, err := streamResp.Recv()
@@ -173,7 +173,7 @@ func (o *OpenAILLM) GenerateStream(ctx context.Context, messages types.MessageLi
 			}
 			return fmt.Errorf("stream error: %w", err)
 		}
-		
+
 		if len(response.Choices) > 0 {
 			content := response.Choices[0].Delta.Content
 			if content != "" {
@@ -185,7 +185,7 @@ func (o *OpenAILLM) GenerateStream(ctx context.Context, messages types.MessageLi
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -194,31 +194,31 @@ func (o *OpenAILLM) Embed(ctx context.Context, text string) (types.EmbeddingVect
 	if text == "" {
 		return nil, fmt.Errorf("empty text")
 	}
-	
+
 	// Use text-embedding-ada-002 model for embeddings
 	req := openai.EmbeddingRequest{
 		Input: []string{text},
 		Model: openai.AdaEmbeddingV2,
 	}
-	
+
 	resp, err := o.client.CreateEmbeddings(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("embedding request failed: %w", err)
 	}
-	
+
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("no embeddings returned")
 	}
-	
+
 	// Convert to our format
 	embedding := make(types.EmbeddingVector, len(resp.Data[0].Embedding))
 	for i, v := range resp.Data[0].Embedding {
 		embedding[i] = float32(v)
 	}
-	
+
 	// Record metrics
 	o.RecordMetrics("embedding_tokens", resp.Usage.TotalTokens)
-	
+
 	return embedding, nil
 }
 
@@ -260,15 +260,15 @@ func (o *OpenAILLM) SetConfig(config *LLMConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
-	
+
 	o.config = config
-	
+
 	// Update base configuration
 	o.SetMaxTokens(config.MaxTokens)
 	o.SetTemperature(config.Temperature)
 	o.SetTopP(config.TopP)
 	o.SetTimeout(config.Timeout)
-	
+
 	return nil
 }
 
@@ -289,12 +289,12 @@ func (o *OpenAILLM) ListModels(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list models: %w", err)
 	}
-	
+
 	var modelNames []string
 	for _, model := range models.Models {
 		modelNames = append(modelNames, model.ID)
 	}
-	
+
 	return modelNames, nil
 }
 
@@ -305,7 +305,7 @@ func (o *OpenAILLM) GetModelInfo() map[string]interface{} {
 	info["supported_models"] = o.GetSupportedModels()
 	info["api_key_set"] = o.config.APIKey != ""
 	info["base_url"] = o.config.BaseURL
-	
+
 	return info
 }
 
@@ -345,24 +345,24 @@ func (o *OpenAILLM) CreateChatCompletion(ctx context.Context, req openai.ChatCom
 	if req.TopP == 0 {
 		req.TopP = float32(o.GetTopP())
 	}
-	
+
 	return o.client.CreateChatCompletion(ctx, req)
 }
 
 // CreateEmbedding creates embeddings with custom options
 func (o *OpenAILLM) CreateEmbedding(ctx context.Context, req openai.EmbeddingRequest) (openai.EmbeddingResponse, error) {
 	// Set default model if not specified
-	if req.Model == 0 { // EmbeddingModel is an int type
+	if req.Model == openai.EmbeddingModel("") {
 		req.Model = openai.AdaEmbeddingV2
 	}
-	
+
 	return o.client.CreateEmbeddings(ctx, req)
 }
 
 // GetTokenUsage returns token usage statistics
 func (o *OpenAILLM) GetTokenUsage() map[string]interface{} {
 	metrics := o.GetMetrics()
-	
+
 	return map[string]interface{}{
 		"total_tokens":      metrics["tokens_used"],
 		"prompt_tokens":     metrics["prompt_tokens"],
@@ -415,7 +415,7 @@ func (o *OpenAILLM) GetModelCapabilities(model string) map[string]interface{} {
 		"streaming":     true,
 		"function_call": false,
 	}
-	
+
 	// Model-specific capabilities
 	switch model {
 	case "gpt-4", "gpt-4-32k", "gpt-4-1106-preview", "gpt-4-turbo-preview":
@@ -429,7 +429,7 @@ func (o *OpenAILLM) GetModelCapabilities(model string) map[string]interface{} {
 		capabilities["completion"] = true
 		capabilities["max_tokens"] = 4097
 	}
-	
+
 	return capabilities
 }
 
@@ -438,7 +438,7 @@ func (o *OpenAILLM) CreateFunctionCall(ctx context.Context, messages types.Messa
 	if err := o.ValidateMessages(messages); err != nil {
 		return openai.ChatCompletionResponse{}, fmt.Errorf("invalid messages: %w", err)
 	}
-	
+
 	// Convert messages to OpenAI format
 	openaiMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, msg := range messages {
@@ -447,7 +447,7 @@ func (o *OpenAILLM) CreateFunctionCall(ctx context.Context, messages types.Messa
 			Content: msg.Content,
 		}
 	}
-	
+
 	req := openai.ChatCompletionRequest{
 		Model:       o.GetModelName(),
 		Messages:    openaiMessages,
@@ -456,6 +456,6 @@ func (o *OpenAILLM) CreateFunctionCall(ctx context.Context, messages types.Messa
 		Temperature: float32(o.GetTemperature()),
 		TopP:        float32(o.GetTopP()),
 	}
-	
+
 	return o.client.CreateChatCompletion(ctx, req)
 }

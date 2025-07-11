@@ -11,6 +11,13 @@ import (
 )
 
 // healthCheck provides a health check endpoint
+// @Summary Health Check
+// @Description Check the health status of the MemGOS API server
+// @Tags health
+// @Accept json
+// @Produce json
+// @Success 200 {object} HealthResponse
+// @Router /health [get]
 func (s *Server) healthCheck(c *gin.Context) {
 	startTime := time.Now() // This should be stored when server starts
 	uptime := time.Since(startTime)
@@ -236,6 +243,17 @@ func (s *Server) shareCube(c *gin.Context) {
 }
 
 // addMemory handles adding memories
+// @Summary Add Memory
+// @Description Add new memories to the system
+// @Tags memories
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body MemoryCreate true "Memory creation parameters"
+// @Success 200 {object} SimpleResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /memories [post]
 func (s *Server) addMemory(c *gin.Context) {
 	var req MemoryCreate
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -303,6 +321,17 @@ func (s *Server) addMemory(c *gin.Context) {
 }
 
 // getAllMemories handles retrieving all memories
+// @Summary Get All Memories
+// @Description Retrieve all memories from a memory cube
+// @Tags memories
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param mem_cube_id query string false "Memory cube ID"
+// @Param user_id query string false "User ID"
+// @Success 200 {object} MemoryResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /memories [get]
 func (s *Server) getAllMemories(c *gin.Context) {
 	memCubeID := c.Query("mem_cube_id")
 	userID := c.Query("user_id")
@@ -462,6 +491,17 @@ func (s *Server) deleteAllMemories(c *gin.Context) {
 }
 
 // searchMemories handles memory search
+// @Summary Search Memories
+// @Description Search through memories using semantic search
+// @Tags memories
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body SearchRequest true "Search parameters"
+// @Success 200 {object} SearchResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /search [post]
 func (s *Server) searchMemories(c *gin.Context) {
 	var req SearchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -515,6 +555,17 @@ func (s *Server) searchMemories(c *gin.Context) {
 }
 
 // chat handles chat requests
+// @Summary Chat with AI
+// @Description Chat with AI using memory-enhanced responses
+// @Tags chat
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body ChatRequest true "Chat request"
+// @Success 200 {object} ChatResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /chat [post]
 func (s *Server) chat(c *gin.Context) {
 	var req ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

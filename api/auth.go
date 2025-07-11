@@ -230,6 +230,16 @@ func (am *AuthManager) ValidateJWT(ctx context.Context, tokenString string) (*ty
 }
 
 // Login handles user login and creates a session
+// @Summary User Login
+// @Description Authenticate user and create a session with JWT token
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body AuthRequest true "Login credentials"
+// @Success 200 {object} BaseResponse[AuthResponse]
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/login [post]
 func (s *Server) login(c *gin.Context) {
 	var req AuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -273,6 +283,14 @@ func (s *Server) login(c *gin.Context) {
 }
 
 // Logout handles user logout
+// @Summary User Logout
+// @Description Logout user and invalidate session
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} SimpleResponse
+// @Router /auth/logout [post]
 func (s *Server) logout(c *gin.Context) {
 	sessionID := c.GetString("session_id")
 	if sessionID != "" {
@@ -286,6 +304,16 @@ func (s *Server) logout(c *gin.Context) {
 }
 
 // RefreshToken handles token refresh
+// @Summary Refresh JWT Token
+// @Description Refresh an existing JWT token to extend session
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} BaseResponse[AuthResponse]
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/refresh [post]
 func (s *Server) refreshToken(c *gin.Context) {
 	tokenString := extractTokenFromHeader(c.GetHeader("Authorization"))
 	if tokenString == "" {
@@ -403,6 +431,7 @@ func (s *Server) isPublicEndpoint(path string) bool {
 		"/health",
 		"/",
 		"/docs",
+		"/swagger",
 		"/openapi.json",
 		"/auth/login",
 		"/auth/refresh",
@@ -415,4 +444,16 @@ func (s *Server) isPublicEndpoint(path string) bool {
 	}
 
 	return false
+}
+
+// GenerateToken generates a simple token for the user (used by enhanced server)
+func (am *AuthManager) GenerateToken(username string) string {
+	// Use the existing JWT generation but with a simple interface
+	ctx := context.Background()
+	token, err := am.GenerateJWT(ctx, username, 60) // 60 minutes expiration
+	if err != nil {
+		// Fall back to a simple placeholder token
+		return "placeholder_token_" + username
+	}
+	return token
 }

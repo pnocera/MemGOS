@@ -1,4 +1,19 @@
 // Package main provides the main entry point for MemGOS
+// @title MemGOS API
+// @version 1.0.0
+// @description Memory-based General Operating System API with comprehensive swagger documentation
+// @contact.name MemGOS API Support
+// @contact.url https://github.com/pnocera/MemGOS
+// @contact.email support@memgos.io
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @host localhost:8080
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT token authentication. Use 'Bearer {token}' format.
 package main
 
 import (
@@ -12,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/memtensor/memgos/api"
 	"github.com/memtensor/memgos/pkg/config"
 	"github.com/memtensor/memgos/pkg/core"
 	"github.com/memtensor/memgos/pkg/interfaces"
@@ -191,24 +207,13 @@ func initializeMetrics(cfg *config.MOSConfig) (interfaces.Metrics, error) {
 }
 
 func runAPIServer(ctx context.Context, mosCore interfaces.MOSCore, cfg *config.MOSConfig, logger interfaces.Logger) error {
-	logger.Info("Starting API server mode")
+	logger.Info("Starting Enhanced API server mode")
 	
-	// TODO: Initialize and start API server
-	// This would typically involve:
-	// 1. Creating HTTP/REST API handlers
-	// 2. Setting up routes for all MOS operations
-	// 3. Starting the server
-	// 4. Handling graceful shutdown
+	// Create the Enhanced API server instance
+	server := api.NewEnhancedServer(mosCore, cfg, logger)
 	
-	logger.Info("API server started", map[string]interface{}{
-		"mode": "api",
-	})
-	
-	// Wait for context cancellation
-	<-ctx.Done()
-	
-	logger.Info("API server shutting down")
-	return nil
+	// Start the server (this will block until context is cancelled)
+	return server.Start(ctx)
 }
 
 func runInteractiveMode(ctx context.Context, mosCore interfaces.MOSCore, cfg *config.MOSConfig, logger interfaces.Logger) error {

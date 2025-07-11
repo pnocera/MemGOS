@@ -10,11 +10,15 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/memtensor/memgos/pkg/chat"
 	"github.com/memtensor/memgos/pkg/config"
 	"github.com/memtensor/memgos/pkg/errors"
 	"github.com/memtensor/memgos/pkg/interfaces"
+	"github.com/memtensor/memgos/pkg/llm"
 	"github.com/memtensor/memgos/pkg/memory"
+	"github.com/memtensor/memgos/pkg/schedulers"
 	"github.com/memtensor/memgos/pkg/types"
+	"github.com/memtensor/memgos/pkg/users"
 )
 
 // MOSCore implements the Memory Operating System Core
@@ -139,22 +143,131 @@ func (mos *MOSCore) initializeComponents(ctx context.Context) error {
 
 // initializeLLM initializes the LLM component
 func (mos *MOSCore) initializeLLM() error {
-	// TODO: Implement LLM factory and initialization
-	mos.logger.Info("LLM initialization placeholder")
+	// Get LLM factory
+	llmFactory := llm.GetGlobalFactory()
+	
+	// Convert config LLMConfig to llm package LLMConfig
+	llmConfig := &llm.LLMConfig{
+		Provider:    string(mos.config.ChatModel.Backend),
+		Model:       mos.config.ChatModel.Model,
+		APIKey:      mos.config.ChatModel.APIKey,
+		BaseURL:     mos.config.ChatModel.BaseURL,
+		MaxTokens:   mos.config.ChatModel.MaxTokens,
+		Temperature: mos.config.ChatModel.Temperature,
+		TopP:        mos.config.ChatModel.TopP,
+		Timeout:     mos.config.ChatModel.Timeout,
+		Extra:       make(map[string]interface{}),
+	}
+	
+	// Set defaults if not provided
+	if llmConfig.MaxTokens == 0 {
+		llmConfig.MaxTokens = 1024
+	}
+	if llmConfig.Temperature == 0 {
+		llmConfig.Temperature = 0.7
+	}
+	if llmConfig.TopP == 0 {
+		llmConfig.TopP = 0.9
+	}
+	
+	// Create LLM instance
+	llmInstance, err := llmFactory.CreateLLM(llmConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create LLM: %w", err)
+	}
+	
+	// Store LLM interface
+	mos.chatLLM = llmInstance
+	
+	mos.logger.Info("LLM initialized successfully", map[string]interface{}{
+		"provider": string(mos.config.ChatModel.Backend),
+		"model":    mos.config.ChatModel.Model,
+	})
+	
 	return nil
 }
 
 // initializeUserManager initializes the user manager component
 func (mos *MOSCore) initializeUserManager() error {
-	// TODO: Implement user manager factory and initialization
-	mos.logger.Info("User manager initialization placeholder")
+	// Create user manager config from MOSCore config
+	userConfig := &users.Config{
+		DatabaseURL:         "sqlite:///tmp/memgos_users.db", // Default SQLite
+		JWTSecret:           "memgos-secret-key",              // TODO: Should be configurable
+		JWTExpirationTime:   24 * time.Hour,                  // 24 hours
+		EnableAuditLogging:  true,
+		MaxLoginAttempts:    5,
+		LockoutDuration:     15 * time.Minute,
+		DatabaseType:        "sqlite",
+		DatabasePath:        "/tmp/memgos_users.db",
+		AuthMethod:          "jwt",
+		SessionTimeout:      8 * time.Hour,
+		RefreshTokenExpiry:  7 * 24 * time.Hour,
+		DefaultRole:         "user",
+		AllowSelfSignup:     false,
+		RequireEmailVerification: false,
+	}
+	
+	// Create user manager instance
+	userManager, err := users.NewManager(userConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create user manager: %w", err)
+	}
+	
+	// Store user manager interface using adapter
+	mos.userManager = NewUserManagerAdapter(userManager)
+	
+	mos.logger.Info("User manager initialized successfully", map[string]interface{}{
+		"database_url": userConfig.DatabaseURL,
+		"jwt_expiration": userConfig.JWTExpirationTime,
+	})
+	
 	return nil
 }
 
 // initializeChatManager initializes the chat manager component
 func (mos *MOSCore) initializeChatManager() error {
-	// TODO: Implement chat manager factory and initialization
-	mos.logger.Info("Chat manager initialization placeholder")
+	// Get chat factory
+	chatFactory := chat.GetGlobalFactory()
+	
+	// Create chat config
+	chatConfig := &chat.MemChatConfig{
+		UserID:                 mos.userID,
+		SessionID:              mos.sessionID,
+		EnableTextualMemory:    mos.config.EnableTextualMemory,
+		EnableActivationMemory: mos.config.EnableActivationMemory,
+		StreamingEnabled:       true,
+		TopK:                   mos.config.TopK,
+		CustomSettings:         make(map[string]interface{}),
+	}
+	
+	// Configure LLM for chat
+	if mos.config.ChatModel != nil {
+		chatConfig.ChatLLM = chat.LLMConfig{
+			Provider:    string(mos.config.ChatModel.Backend),
+			Model:       mos.config.ChatModel.Model,
+			APIKey:      mos.config.ChatModel.APIKey,
+			BaseURL:     mos.config.ChatModel.BaseURL,
+			MaxTokens:   mos.config.ChatModel.MaxTokens,
+			Temperature: mos.config.ChatModel.Temperature,
+			TopP:        mos.config.ChatModel.TopP,
+		}
+	}
+	
+	// Create chat manager instance
+	chatManager, err := chatFactory.CreateFromConfig(chatConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create chat manager: %w", err)
+	}
+	
+	// Store chat manager interface using adapter
+	mos.chatManager = NewChatManagerAdapter(chatManager)
+	
+	mos.logger.Info("Chat manager initialized successfully", map[string]interface{}{
+		"user_id":    mos.userID,
+		"session_id": mos.sessionID,
+		"top_k":      mos.config.TopK,
+	})
+	
 	return nil
 }
 
@@ -164,8 +277,56 @@ func (mos *MOSCore) initializeScheduler(ctx context.Context) error {
 		return nil
 	}
 
-	// TODO: Implement scheduler factory and initialization
-	mos.logger.Info("Scheduler initialization placeholder")
+	// Get scheduler factory
+	schedulerFactory := schedulers.NewSchedulerFactory()
+	
+	// Create scheduler config
+	schedulerConfig := &schedulers.GeneralSchedulerConfig{
+		BaseSchedulerConfig: &schedulers.BaseSchedulerConfig{
+			ThreadPoolMaxWorkers:   4,
+			EnableParallelDispatch: true,
+			NATSConfig: &schedulers.NATSConfig{
+				URLs:         []string{"nats://localhost:4222"},
+				MaxReconnect: 10,
+				JetStreamConfig: &schedulers.JetStreamConfig{
+					StreamName:      "memgos-stream",
+					StreamSubjects:  []string{"memgos.>"},
+					ConsumerName:    "memgos-consumer",
+					ConsumerDurable: true,
+					MaxDeliver:      3,
+					Replicas:        1,
+				},
+			},
+		},
+		TopK:              mos.config.TopK,
+		TopN:              20,
+		ActivationMemSize: 1024,
+		SearchMethod:      "semantic",
+		ActMemDumpPath:    "/tmp/memgos_activation_mem.dump",
+	}
+	
+	// Create scheduler instance
+	scheduler, err := schedulerFactory.CreateScheduler(schedulers.GeneralSchedulerType, schedulerConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create scheduler: %w", err)
+	}
+	
+	// Initialize scheduler with LLM (if available)
+	if mos.chatLLM != nil {
+		if err := scheduler.InitializeModules(mos.chatLLM); err != nil {
+			return fmt.Errorf("failed to initialize scheduler modules: %w", err)
+		}
+	}
+	
+	// Store scheduler interface using adapter
+	mos.scheduler = NewSchedulerAdapter(scheduler)
+	
+	mos.logger.Info("Scheduler initialized successfully", map[string]interface{}{
+		"type":    "general",
+		"top_k":   schedulerConfig.TopK,
+		"workers": schedulerConfig.ThreadPoolMaxWorkers,
+	})
+	
 	return nil
 }
 
@@ -175,8 +336,44 @@ func (mos *MOSCore) initializeHealthChecker() error {
 		return nil
 	}
 
-	// TODO: Implement health checker initialization
-	mos.logger.Info("Health checker initialization placeholder")
+	// Create a simple health checker implementation
+	healthChecker := &SimpleHealthChecker{
+		status:    "healthy",
+		logger:    mos.logger,
+		checks:    make(map[string]func(ctx context.Context) error),
+		lastCheck: time.Now(),
+	}
+	
+	// Register basic health checks
+	healthChecker.RegisterCheck("llm", func(ctx context.Context) error {
+		if mos.chatLLM == nil {
+			return fmt.Errorf("LLM not initialized")
+		}
+		return nil
+	})
+	
+	healthChecker.RegisterCheck("user_manager", func(ctx context.Context) error {
+		if mos.userManager == nil {
+			return fmt.Errorf("user manager not initialized")
+		}
+		return nil
+	})
+	
+	healthChecker.RegisterCheck("cube_registry", func(ctx context.Context) error {
+		if mos.cubeRegistry == nil {
+			return fmt.Errorf("cube registry not initialized")
+		}
+		return nil
+	})
+	
+	// Store health checker interface
+	mos.healthChecker = healthChecker
+	
+	mos.logger.Info("Health checker initialized successfully", map[string]interface{}{
+		"checks_registered": len(healthChecker.checks),
+		"status":            healthChecker.status,
+	})
+	
 	return nil
 }
 
@@ -1138,4 +1335,55 @@ func (mos *MOSCore) isLocalPath(path string) bool {
 	// Simple heuristic: if it doesn't start with http/https, consider it local
 	return !strings.HasPrefix(strings.ToLower(path), "http://") &&
 		!strings.HasPrefix(strings.ToLower(path), "https://")
+}
+
+// SimpleHealthChecker is a basic implementation of the HealthChecker interface
+type SimpleHealthChecker struct {
+	status    string
+	logger    interfaces.Logger
+	checks    map[string]func(ctx context.Context) error
+	lastCheck time.Time
+	mu        sync.RWMutex
+}
+
+// Check performs a health check
+func (hc *SimpleHealthChecker) Check(ctx context.Context) error {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	
+	var errors []error
+	
+	for name, check := range hc.checks {
+		if err := check(ctx); err != nil {
+			hc.logger.Warn("Health check failed", map[string]interface{}{
+				"check": name,
+				"error": err.Error(),
+			})
+			errors = append(errors, fmt.Errorf("check %s failed: %w", name, err))
+		}
+	}
+	
+	hc.lastCheck = time.Now()
+	
+	if len(errors) > 0 {
+		hc.status = "unhealthy"
+		return fmt.Errorf("health checks failed: %v", errors)
+	}
+	
+	hc.status = "healthy"
+	return nil
+}
+
+// GetStatus returns the current health status
+func (hc *SimpleHealthChecker) GetStatus() string {
+	hc.mu.RLock()
+	defer hc.mu.RUnlock()
+	return hc.status
+}
+
+// RegisterCheck registers a health check
+func (hc *SimpleHealthChecker) RegisterCheck(name string, check func(ctx context.Context) error) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	hc.checks[name] = check
 }

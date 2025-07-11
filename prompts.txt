@@ -1,1 +1,8 @@
 ./claude-flow hive-mind spawn "The goal is to fix the golang errors in every .go file in this repo. open a github issue in https://github.com/pnocera/MemGOS repo.let each agent put their reportings in this github issue after each action." --claude
+
+
+./claude-flow hive-mind spawn "The goal is to identify all unimplemented features in this repo and implement them. open a github issue in https://github.com/pnocera/MemGOS repo.let each agent put their reportings in this github issue after each action." --claude
+
+./claude-flow hive-mind spawn "Goal: It seems like the hive did some work on https://github.com/pnocera/MemGOS/issues/6 but was interrupted and didn't complete. Please complete the job. let each agent put their reportings in this github issue after each action." --claude
+
+./claude-flow hive-mind spawn "Goal: Provide a swagger API using https://github.com/swaggo/swag and https://github.com/swaggo/gin-swagger.open a github issue in https://github.com/pnocera/MemGOS repo. let each agent report in this github issue after each action." --claude

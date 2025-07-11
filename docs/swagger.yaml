@@ -1,0 +1,390 @@
+basePath: /
+definitions:
+  api.AuthRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
+  api.AuthResponse:
+    properties:
+      expires_at:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      session_id:
+        type: string
+      token:
+        type: string
+      user_id:
+        type: string
+    type: object
+  api.BaseResponse-api_AuthResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        $ref: '#/definitions/api.AuthResponse'
+      message:
+        example: Operation successful
+        type: string
+    type: object
+  api.ChatRequest:
+    properties:
+      context:
+        additionalProperties:
+          type: string
+        type: object
+      max_tokens:
+        example: 1000
+        type: integer
+      query:
+        example: What is the latest update?
+        type: string
+      top_k:
+        example: 5
+        type: integer
+      user_id:
+        example: user123
+        type: string
+    required:
+    - query
+    type: object
+  api.ChatResponse:
+    properties:
+      code:
+        example: 200
+        type: integer
+      data:
+        type: string
+      message:
+        example: Operation successful
+        type: string
+    type: object
+  api.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      details:
+        type: string
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  api.HealthResponse:
+    properties:
+      checks:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+  api.MemoryCreate:
+    properties:
+      doc_path:
+        example: /path/to/document.txt
+        type: string
+      mem_cube_id:
+        example: cube123
+        type: string
+      memory_content:
+        example: This is a memory content
+        type: string
+      messages:
+        items:
+          $ref: '#/definitions/api.Message'
+        type: array
+      user_id:
+        example: user123
+        type: string
+    type: object
+  api.MemoryResponse:
+    type: object
+  api.Message:
+    properties:
+      content:
+        example: Hello, how can I help you?
+        type: string
+      role:
+        example: user
+        type: string
+    required:
+    - content
+    - role
+    type: object
+  api.SearchRequest:
+    properties:
+      install_cube_ids:
+        example:
+        - cube123
+        - cube456
+        items:
+          type: string
+        type: array
+      query:
+        example: How to implement a feature?
+        type: string
+      top_k:
+        example: 5
+        type: integer
+      user_id:
+        example: user123
+        type: string
+    required:
+    - query
+    type: object
+  api.SearchResponse:
+    type: object
+  api.SimpleResponse:
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@memgos.io
+    name: MemGOS API Support
+    url: https://github.com/pnocera/MemGOS
+  description: Memory-based General Operating System API with comprehensive swagger
+    documentation
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: MemGOS API
+  version: 1.0.0
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and create a session with JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.BaseResponse-api_AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      summary: User Login
+      tags:
+      - authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout user and invalidate session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.SimpleResponse'
+      security:
+      - BearerAuth: []
+      summary: User Logout
+      tags:
+      - authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh an existing JWT token to extend session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.BaseResponse-api_AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh JWT Token
+      tags:
+      - authentication
+  /chat:
+    post:
+      consumes:
+      - application/json
+      description: Chat with AI using memory-enhanced responses
+      parameters:
+      - description: Chat request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.ChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ChatResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Chat with AI
+      tags:
+      - chat
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check the health status of the MemGOS API server
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.HealthResponse'
+      summary: Health Check
+      tags:
+      - health
+  /memories:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all memories from a memory cube
+      parameters:
+      - description: Memory cube ID
+        in: query
+        name: mem_cube_id
+        type: string
+      - description: User ID
+        in: query
+        name: user_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.MemoryResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get All Memories
+      tags:
+      - memories
+    post:
+      consumes:
+      - application/json
+      description: Add new memories to the system
+      parameters:
+      - description: Memory creation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.MemoryCreate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.SimpleResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add Memory
+      tags:
+      - memories
+  /search:
+    post:
+      consumes:
+      - application/json
+      description: Search through memories using semantic search
+      parameters:
+      - description: Search parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.SearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.SearchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search Memories
+      tags:
+      - memories
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: JWT token authentication. Use 'Bearer {token}' format.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
