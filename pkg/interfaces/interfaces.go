@@ -272,6 +272,26 @@ type UserManager interface {
 	
 	// GenerateJWT generates a JWT token for a user
 	GenerateJWT(ctx context.Context, userID string, expirationMinutes int) (string, error)
+	
+	// API Token management methods
+	
+	// CreateAPIToken creates a new API token for a user
+	CreateAPIToken(userID string, params interface{}) (interface{}, error)
+	
+	// GetAPITokens returns all API tokens for a user
+	GetAPITokens(userID string) (interface{}, error)
+	
+	// GetAPIToken retrieves a specific API token by ID
+	GetAPIToken(userID, tokenID string) (interface{}, error)
+	
+	// UpdateAPIToken updates an API token's metadata
+	UpdateAPIToken(userID, tokenID string, params interface{}) (interface{}, error)
+	
+	// RevokeAPIToken revokes an API token
+	RevokeAPIToken(userID, tokenID string) error
+	
+	// ValidateAPIToken validates an API token and returns the associated user
+	ValidateAPIToken(token string) (interface{}, interface{}, error)
 }
 
 // ChatManager defines the interface for chat management implementations

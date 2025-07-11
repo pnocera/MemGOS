@@ -233,3 +233,41 @@ func (u *UserManagerAdapter) GenerateJWT(ctx context.Context, userID string, exp
 	// For now, return a placeholder token
 	return fmt.Sprintf("jwt-token-%s-%d", userID, time.Now().Unix()), nil
 }
+
+// API Token management methods
+
+// CreateAPIToken creates a new API token for a user
+func (u *UserManagerAdapter) CreateAPIToken(userID string, params interface{}) (interface{}, error) {
+	if p, ok := params.(users.CreateAPITokenParams); ok {
+		return u.manager.CreateAPIToken(userID, p)
+	}
+	return nil, fmt.Errorf("invalid parameters type for CreateAPIToken")
+}
+
+// GetAPITokens returns all API tokens for a user
+func (u *UserManagerAdapter) GetAPITokens(userID string) (interface{}, error) {
+	return u.manager.GetAPITokens(userID)
+}
+
+// GetAPIToken retrieves a specific API token by ID
+func (u *UserManagerAdapter) GetAPIToken(userID, tokenID string) (interface{}, error) {
+	return u.manager.GetAPIToken(userID, tokenID)
+}
+
+// UpdateAPIToken updates an API token's metadata
+func (u *UserManagerAdapter) UpdateAPIToken(userID, tokenID string, params interface{}) (interface{}, error) {
+	if p, ok := params.(users.UpdateAPITokenParams); ok {
+		return u.manager.UpdateAPIToken(userID, tokenID, p)
+	}
+	return nil, fmt.Errorf("invalid parameters type for UpdateAPIToken")
+}
+
+// RevokeAPIToken revokes an API token
+func (u *UserManagerAdapter) RevokeAPIToken(userID, tokenID string) error {
+	return u.manager.RevokeAPIToken(userID, tokenID)
+}
+
+// ValidateAPIToken validates an API token and returns the associated user
+func (u *UserManagerAdapter) ValidateAPIToken(token string) (interface{}, interface{}, error) {
+	return u.manager.ValidateAPIToken(token)
+}

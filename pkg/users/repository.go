@@ -65,6 +65,7 @@ func (r *Repository) migrate() error {
 		&Cube{},
 		&UserCubeAssociation{},
 		&Session{},
+		&APIToken{},
 		&Permission{},
 		&RolePermission{},
 		&AuditLog{},
@@ -466,6 +467,76 @@ func (r *Repository) GetAuditLogs(limit, offset int, userID, action, resource st
 	}
 
 	return logs, total, nil
+}
+
+// API Token operations
+
+// CreateAPIToken creates a new API token
+func (r *Repository) CreateAPIToken(token *APIToken) (*APIToken, error) {
+	if err := r.db.Create(token).Error; err != nil {
+		return nil, fmt.Errorf("failed to create API token: %w", err)
+	}
+	return token, nil
+}
+
+// GetAPIToken retrieves an API token by ID
+func (r *Repository) GetAPIToken(tokenID string) (*APIToken, error) {
+	var token APIToken
+	result := r.db.Where("token_id = ? AND is_active = ?", tokenID, true).First(&token)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get API token: %w", result.Error)
+	}
+	return &token, nil
+}
+
+// GetUserAPITokens retrieves all API tokens for a user
+func (r *Repository) GetUserAPITokens(userID string) ([]APIToken, error) {
+	var tokens []APIToken
+	if err := r.db.Where("user_id = ? AND is_active = ?", userID, true).Find(&tokens).Error; err != nil {
+		return nil, fmt.Errorf("failed to get user API tokens: %w", err)
+	}
+	return tokens, nil
+}
+
+// GetAllActiveAPITokens retrieves all active API tokens (for validation)
+func (r *Repository) GetAllActiveAPITokens() ([]APIToken, error) {
+	var tokens []APIToken
+	if err := r.db.Where("is_active = ?", true).Find(&tokens).Error; err != nil {
+		return nil, fmt.Errorf("failed to get active API tokens: %w", err)
+	}
+	return tokens, nil
+}
+
+// UpdateAPIToken updates an API token
+func (r *Repository) UpdateAPIToken(token *APIToken) error {
+	if err := r.db.Save(token).Error; err != nil {
+		return fmt.Errorf("failed to update API token: %w", err)
+	}
+	return nil
+}
+
+// DeleteAPIToken deletes (revokes) an API token
+func (r *Repository) DeleteAPIToken(tokenID string) error {
+	result := r.db.Where("token_id = ?", tokenID).Delete(&APIToken{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete API token: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("API token not found")
+	}
+	return nil
+}
+
+// CleanupExpiredAPITokens removes expired API tokens
+func (r *Repository) CleanupExpiredAPITokens() error {
+	result := r.db.Where("expires_at IS NOT NULL AND expires_at < ?", time.Now()).Delete(&APIToken{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to cleanup expired API tokens: %w", result.Error)
+	}
+	return nil
 }
 
 // Health check operation

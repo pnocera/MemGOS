@@ -103,6 +103,19 @@ func (s *EnhancedServer) setupEnhancedRoutes() {
 	// Enhanced OpenAPI spec endpoint
 	s.router.GET("/openapi.json", s.getCompleteOpenAPISpec)
 
+	// API Token management endpoints
+	api := s.router.Group("/api/v1")
+	{
+		tokens := api.Group("/tokens")
+		{
+			tokens.POST("", s.createAPIToken)
+			tokens.GET("", s.getAPITokens)
+			tokens.GET("/:id", s.getAPIToken)
+			tokens.PUT("/:id", s.updateAPIToken)
+			tokens.DELETE("/:id", s.revokeAPIToken)
+		}
+	}
+
 	// Swagger UI routes
 	s.router.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	s.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

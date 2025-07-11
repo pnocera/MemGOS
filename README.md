@@ -1,7 +1,7 @@
 # MemGOS - Memory Operating System in Go
 
 [![Go Version](https://img.shields.io/badge/Go-1.24-blue.svg)](https://golang.org)
-[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
 [![Build Status](https://img.shields.io/badge/Build-Passing-green.svg)](https://github.com/memtensor/memgos)
 
 MemGOS is a comprehensive Go 1.24 implementation of the Memory Operating System for Large Language Models. It provides a modular, performant, and scalable architecture for managing different types of memory (textual, activation, and parametric) in AI systems.
@@ -18,8 +18,10 @@ MemGOS is a comprehensive Go 1.24 implementation of the Memory Operating System 
 - **🏗️ Modular Architecture**: Interface-driven design for easy extensibility
 - **📊 Observability**: Built-in metrics, logging, and health checks
 - **🔄 Scheduling**: Background memory processing and optimization
-- **👥 Multi-User**: User management and access control
+- **👥 Multi-User**: User management and access control with JWT authentication
+- **🔐 API Token Auth**: Secure programmatic access with scoped API tokens
 - **💬 Chat Integration**: Memory-augmented chat functionality
+- **📚 Swagger API**: Complete OpenAPI 3.0 documentation and interactive UI
 
 ### LLM Integrations
 - **OpenAI**: GPT models via API
@@ -100,13 +102,84 @@ memgos chat "What programming languages do I like?"
 # Start API server
 memgos --api --config config.yaml
 
-# Use REST API
-curl -X POST http://localhost:8000/api/v1/search \
+# View API documentation
+open http://localhost:8080/docs
+
+# Authenticate and get JWT token
+curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "password"}'
+
+# Use REST API with authentication
+curl -X POST http://localhost:8080/api/v1/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
   -d '{"query": "programming", "top_k": 5}'
+
+# Create API token for programmatic access
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
+  -d '{"name": "CI/CD Token", "scopes": ["read", "write"]}'
+
+# Use API token (alternative to JWT)
+curl -X GET http://localhost:8080/api/v1/memories \
+  -H "Authorization: Bearer <api-token>"
 ```
 
-### 4. Interactive Mode
+### 4. API Authentication
+
+MemGOS supports two authentication methods:
+
+#### JWT Authentication (Session-based)
+```bash
+# Login to get JWT token
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "password"}'
+
+# Use JWT token for API calls
+curl -X GET http://localhost:8080/api/v1/memories \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Refresh JWT token
+curl -X POST http://localhost:8080/auth/refresh \
+  -H "Authorization: Bearer <refresh-token>"
+```
+
+#### API Token Authentication (Programmatic)
+```bash
+# Create API token (requires JWT authentication)
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <jwt-token>" \
+  -d '{
+    "name": "My API Token",
+    "description": "Token for CI/CD pipeline",
+    "scopes": ["read", "write"],
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
+
+# List your API tokens
+curl -X GET http://localhost:8080/api/v1/tokens \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Use API token for requests
+curl -X GET http://localhost:8080/api/v1/memories \
+  -H "Authorization: Bearer memgos_<your-api-token>"
+
+# Revoke API token
+curl -X DELETE http://localhost:8080/api/v1/tokens/<token-id> \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### Token Scopes
+- **`read`**: Read-only access to memories and data
+- **`write`**: Read and write access to memories
+- **`admin`**: Administrative access including user management
+- **`full`**: Full access equivalent to user session
+
+### 5. Interactive Mode
 ```bash
 # Start interactive CLI
 memgos --interactive --config config.yaml
@@ -127,6 +200,7 @@ memgos --interactive --config config.yaml
 ```
 memgos/
 ├── cmd/memgos/          # Main application
+├── api/                 # REST API server with authentication
 ├── pkg/
 │   ├── types/           # Core data structures
 │   ├── interfaces/      # Interface definitions
@@ -140,10 +214,10 @@ memgos/
 │   ├── graphdb/         # Graph databases
 │   ├── parsers/         # Document parsers
 │   ├── schedulers/      # Memory schedulers
-│   ├── users/           # User management
+│   ├── users/           # User management and authentication
 │   └── chat/            # Chat functionality
+├── docs/                # Swagger/OpenAPI documentation
 ├── examples/            # Usage examples
-├── docs/                # Documentation
 └── tests/               # Test files
 ```
 
@@ -162,6 +236,57 @@ memgos/
 - Cross-memory search and operations
 - User and session management
 - Chat functionality coordination
+
+#### API Server
+- **Authentication**: JWT and API token-based security
+- **RESTful APIs**: Complete REST API with OpenAPI 3.0 specification
+- **User Management**: User registration, authentication, and authorization
+- **Memory Operations**: CRUD operations for all memory types
+- **Token Management**: API token creation, listing, and revocation
+
+## 🔌 API Endpoints
+
+### Authentication Endpoints
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/auth/login` | POST | User login with username/password |
+| `/auth/logout` | POST | User logout and session invalidation |
+| `/auth/refresh` | POST | Refresh JWT token |
+
+### API Token Management
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/api/v1/tokens` | POST | Create new API token |
+| `/api/v1/tokens` | GET | List user's API tokens |
+| `/api/v1/tokens/{id}` | GET | Get specific token details |
+| `/api/v1/tokens/{id}` | PUT | Update token metadata |
+| `/api/v1/tokens/{id}` | DELETE | Revoke API token |
+
+### Memory Operations
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/api/v1/memories` | GET | List all memories |
+| `/api/v1/memories` | POST | Add new memory |
+| `/api/v1/memories/{id}` | GET | Get specific memory |
+| `/api/v1/memories/{id}` | PUT | Update memory |
+| `/api/v1/memories/{id}` | DELETE | Delete memory |
+| `/api/v1/search` | POST | Search memories |
+
+### Chat Operations
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/api/v1/chat` | POST | Send chat message |
+| `/api/v1/chat/history` | GET | Get chat history |
+| `/api/v1/chat/clear` | DELETE | Clear chat history |
+
+### System Operations
+| Endpoint | Method | Description |
+|----------|---------|-------------|
+| `/health` | GET | Health check endpoint |
+| `/docs` | GET | Swagger UI documentation |
+| `/openapi.json` | GET | OpenAPI 3.0 specification |
+
+*For complete API documentation, visit `/docs` when running the server.*
 
 ## 📊 Performance
 
@@ -266,7 +391,7 @@ We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.
 
 ## 📄 License
 
-MemGOS is licensed under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
+MemGOS is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
 
 ## 🌟 Acknowledgments
 
@@ -280,12 +405,16 @@ MemGOS is inspired by the Python [MemOS](https://github.com/MemTensor/MemOS) pro
 
 ## 🗺️ Roadmap
 
-### Version 1.0
+### Version 1.0 (Current)
 - [x] Core memory system implementation
 - [x] Basic LLM integrations
 - [x] Configuration system
 - [x] CLI interface
-- [ ] API server implementation
+- [x] **API server implementation**
+- [x] **JWT authentication system**
+- [x] **API token authentication**
+- [x] **Swagger/OpenAPI documentation**
+- [x] **User management system**
 - [ ] Comprehensive testing
 
 ### Version 1.1

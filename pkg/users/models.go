@@ -34,6 +34,7 @@ type User struct {
 	OwnedCubes []Cube `gorm:"foreignKey:OwnerID;constraint:OnDelete:CASCADE" json:"owned_cubes,omitempty"`
 	Cubes      []Cube `gorm:"many2many:user_cube_associations" json:"cubes,omitempty"`
 	Sessions   []Session `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
+	APITokens  []APIToken `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 	AuditLogs  []AuditLog `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
@@ -189,6 +190,89 @@ func (al *AuditLog) BeforeCreate(tx *gorm.DB) error {
 	}
 	al.CreatedAt = time.Now()
 	return nil
+}
+
+// APITokenScope represents the scope/permissions of an API token
+type APITokenScope string
+
+const (
+	ScopeReadOnly  APITokenScope = "read"       // Read-only access
+	ScopeWrite     APITokenScope = "write"      // Read and write access
+	ScopeAdmin     APITokenScope = "admin"      // Administrative access
+	ScopeFullAccess APITokenScope = "full"      // Full access (equivalent to user session)
+)
+
+// APIToken represents an API token for programmatic access
+type APIToken struct {
+	TokenID     string        `gorm:"primaryKey;type:varchar(36)" json:"token_id"`
+	UserID      string        `gorm:"not null;type:varchar(36)" json:"user_id"`
+	Name        string        `gorm:"not null" json:"name"`                              // Human-readable name
+	Description string        `json:"description,omitempty"`                           // Optional description
+	TokenHash   string        `gorm:"not null;uniqueIndex" json:"-"`                   // Hashed token, never returned
+	Prefix      string        `gorm:"not null" json:"prefix"`                          // First 8 chars of token for display
+	Scopes      []string      `gorm:"type:json" json:"scopes"`                         // Array of scopes
+	ExpiresAt   *time.Time    `json:"expires_at,omitempty"`                            // Optional expiration
+	LastUsedAt  *time.Time    `json:"last_used_at,omitempty"`                          // Last usage timestamp
+	LastUsedIP  string        `json:"last_used_ip,omitempty"`                          // Last IP address used
+	CreatedAt   time.Time     `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time     `gorm:"not null" json:"updated_at"`
+	IsActive    bool          `gorm:"not null;default:true" json:"is_active"`
+
+	// Relationships
+	User User `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
+}
+
+// BeforeCreate hook for APIToken model
+func (at *APIToken) BeforeCreate(tx *gorm.DB) error {
+	if at.TokenID == "" {
+		at.TokenID = uuid.New().String()
+	}
+	at.CreatedAt = time.Now()
+	at.UpdatedAt = time.Now()
+	return nil
+}
+
+// BeforeUpdate hook for APIToken model
+func (at *APIToken) BeforeUpdate(tx *gorm.DB) error {
+	at.UpdatedAt = time.Now()
+	return nil
+}
+
+// IsExpired checks if the API token has expired
+func (at *APIToken) IsExpired() bool {
+	if at.ExpiresAt == nil {
+		return false // No expiration set
+	}
+	return time.Now().After(*at.ExpiresAt)
+}
+
+// HasScope checks if the token has a specific scope
+func (at *APIToken) HasScope(scope APITokenScope) bool {
+	// Full access scope grants all permissions
+	for _, s := range at.Scopes {
+		if s == string(ScopeFullAccess) {
+			return true
+		}
+		if s == string(scope) {
+			return true
+		}
+		// Admin scope includes write and read
+		if s == string(ScopeAdmin) && (scope == ScopeWrite || scope == ScopeReadOnly) {
+			return true
+		}
+		// Write scope includes read
+		if s == string(ScopeWrite) && scope == ScopeReadOnly {
+			return true
+		}
+	}
+	return false
+}
+
+// UpdateLastUsed updates the last used timestamp and IP
+func (at *APIToken) UpdateLastUsed(ipAddress string) {
+	now := time.Now()
+	at.LastUsedAt = &now
+	at.LastUsedIP = ipAddress
 }
 
 // UserProfile represents extended user profile information

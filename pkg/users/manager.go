@@ -1,10 +1,13 @@
 package users
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Manager is the main user management service that coordinates all user operations
@@ -536,6 +539,229 @@ func (m *Manager) GetUserPermissions(userID string) (map[string][]string, error)
 	return m.authzService.GetUserPermissions(userID)
 }
 
+// API Token Management Methods
+
+// CreateAPIToken creates a new API token for a user
+func (m *Manager) CreateAPIToken(userID string, params CreateAPITokenParams) (*APITokenResponse, error) {
+	// Validate parameters
+	if err := params.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid parameters: %w", err)
+	}
+
+	// Validate user exists
+	user, err := m.repository.GetUser(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// Generate secure token
+	token, err := m.generateSecureToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	// Hash the token for storage
+	tokenHash, err := m.authService.HashPassword(token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash token: %w", err)
+	}
+
+	// Create API token
+	apiToken := &APIToken{
+		UserID:      userID,
+		Name:        params.Name,
+		Description: params.Description,
+		TokenHash:   tokenHash,
+		Prefix:      token[:8], // Store first 8 chars for display
+		Scopes:      params.Scopes,
+		ExpiresAt:   params.ExpiresAt,
+		IsActive:    true,
+	}
+
+	// Save to database
+	createdToken, err := m.repository.CreateAPIToken(apiToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API token: %w", err)
+	}
+
+	// Log audit event
+	if m.auditEnabled {
+		m.logAuditEvent(userID, "api_token_create", "tokens", createdToken.TokenID,
+			fmt.Sprintf("Created API token: %s", createdToken.Name), true)
+	}
+
+	// Return response with the plain token (only time it's visible)
+	return &APITokenResponse{
+		Token:       token,
+		TokenID:     createdToken.TokenID,
+		Name:        createdToken.Name,
+		Description: createdToken.Description,
+		Prefix:      createdToken.Prefix,
+		Scopes:      createdToken.Scopes,
+		ExpiresAt:   createdToken.ExpiresAt,
+		CreatedAt:   createdToken.CreatedAt,
+	}, nil
+}
+
+// GetAPITokens returns all API tokens for a user (without the actual token values)
+func (m *Manager) GetAPITokens(userID string) ([]APIToken, error) {
+	// Validate user exists
+	valid, err := m.repository.ValidateUser(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate user: %w", err)
+	}
+	if !valid {
+		return nil, fmt.Errorf("user not found or inactive")
+	}
+
+	tokens, err := m.repository.GetUserAPITokens(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API tokens: %w", err)
+	}
+
+	return tokens, nil
+}
+
+// GetAPIToken retrieves a specific API token by ID
+func (m *Manager) GetAPIToken(userID, tokenID string) (*APIToken, error) {
+	token, err := m.repository.GetAPIToken(tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API token: %w", err)
+	}
+
+	if token == nil {
+		return nil, fmt.Errorf("API token not found")
+	}
+
+	// Verify the token belongs to the user
+	if token.UserID != userID {
+		return nil, fmt.Errorf("API token not found")
+	}
+
+	return token, nil
+}
+
+// UpdateAPIToken updates an API token's metadata
+func (m *Manager) UpdateAPIToken(userID, tokenID string, params UpdateAPITokenParams) (*APIToken, error) {
+	// Get existing token
+	token, err := m.GetAPIToken(userID, tokenID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update fields
+	if params.Name != "" {
+		token.Name = params.Name
+	}
+	if params.Description != nil {
+		token.Description = *params.Description
+	}
+	if params.Scopes != nil {
+		token.Scopes = params.Scopes
+	}
+	if params.ExpiresAt != nil {
+		token.ExpiresAt = params.ExpiresAt
+	}
+	if params.IsActive != nil {
+		token.IsActive = *params.IsActive
+	}
+
+	// Update in database
+	if err := m.repository.UpdateAPIToken(token); err != nil {
+		return nil, fmt.Errorf("failed to update API token: %w", err)
+	}
+
+	// Log audit event
+	if m.auditEnabled {
+		m.logAuditEvent(userID, "api_token_update", "tokens", tokenID,
+			fmt.Sprintf("Updated API token: %s", token.Name), true)
+	}
+
+	return token, nil
+}
+
+// RevokeAPIToken revokes an API token
+func (m *Manager) RevokeAPIToken(userID, tokenID string) error {
+	// Get token to verify ownership
+	token, err := m.GetAPIToken(userID, tokenID)
+	if err != nil {
+		return err
+	}
+
+	// Delete from database
+	if err := m.repository.DeleteAPIToken(tokenID); err != nil {
+		return fmt.Errorf("failed to revoke API token: %w", err)
+	}
+
+	// Log audit event
+	if m.auditEnabled {
+		m.logAuditEvent(userID, "api_token_revoke", "tokens", tokenID,
+			fmt.Sprintf("Revoked API token: %s", token.Name), true)
+	}
+
+	return nil
+}
+
+// ValidateAPIToken validates an API token and returns the associated user
+func (m *Manager) ValidateAPIToken(token string) (*User, *APIToken, error) {
+	// Get all active tokens (this is not efficient for large numbers of tokens)
+	// In production, you'd want to add an index or use a different approach
+	allTokens, err := m.repository.GetAllActiveAPITokens()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get API tokens: %w", err)
+	}
+
+	// Check each token hash
+	for _, apiToken := range allTokens {
+		// Check if token matches hash
+		if err := bcrypt.CompareHashAndPassword([]byte(apiToken.TokenHash), []byte(token)); err == nil {
+			// Token matches, check if it's still valid
+			if !apiToken.IsActive || apiToken.IsExpired() {
+				return nil, nil, fmt.Errorf("API token is inactive or expired")
+			}
+
+			// Get user
+			user, err := m.repository.GetUser(apiToken.UserID)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get user: %w", err)
+			}
+
+			if user == nil || !user.IsActive {
+				return nil, nil, fmt.Errorf("user is inactive")
+			}
+
+			// Update last used
+			apiToken.UpdateLastUsed("") // IP will be set by middleware
+			if err := m.repository.UpdateAPIToken(&apiToken); err != nil {
+				// Log error but don't fail validation
+				fmt.Printf("Warning: failed to update token last used: %v\n", err)
+			}
+
+			// Remove password from user response
+			user.Password = ""
+			return user, &apiToken, nil
+		}
+	}
+
+	return nil, nil, fmt.Errorf("invalid API token")
+}
+
+// generateSecureToken generates a cryptographically secure token
+func (m *Manager) generateSecureToken() (string, error) {
+	// Generate 32 random bytes
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+
+	// Encode to base64 and add a prefix
+	token := "memgos_" + base64.URLEncoding.EncodeToString(bytes)
+	return token, nil
+}
+
 // Utility Methods
 
 // HealthCheck performs a health check on the user management system
@@ -634,4 +860,59 @@ type PaginatedUsersResponse struct {
 	Total  int64  `json:"total"`
 	Limit  int    `json:"limit"`
 	Offset int    `json:"offset"`
+}
+
+// CreateAPITokenParams contains parameters for creating an API token
+type CreateAPITokenParams struct {
+	Name        string     `json:"name" binding:"required"`
+	Description string     `json:"description,omitempty"`
+	Scopes      []string   `json:"scopes" binding:"required"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+
+// Validate validates the create API token parameters
+func (p CreateAPITokenParams) Validate() error {
+	if p.Name == "" {
+		return NewValidationError("name is required")
+	}
+	if len(p.Scopes) == 0 {
+		return NewValidationError("at least one scope is required")
+	}
+	
+	// Validate scopes
+	validScopes := map[string]bool{
+		string(ScopeReadOnly):   true,
+		string(ScopeWrite):      true,
+		string(ScopeAdmin):      true,
+		string(ScopeFullAccess): true,
+	}
+	
+	for _, scope := range p.Scopes {
+		if !validScopes[scope] {
+			return NewValidationError(fmt.Sprintf("invalid scope: %s", scope))
+		}
+	}
+	
+	return nil
+}
+
+// UpdateAPITokenParams contains parameters for updating an API token
+type UpdateAPITokenParams struct {
+	Name        string     `json:"name,omitempty"`
+	Description *string    `json:"description,omitempty"`
+	Scopes      []string   `json:"scopes,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	IsActive    *bool      `json:"is_active,omitempty"`
+}
+
+// APITokenResponse represents the response when creating an API token
+type APITokenResponse struct {
+	Token       string     `json:"token"`                     // The actual token (only returned on creation)
+	TokenID     string     `json:"token_id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Prefix      string     `json:"prefix"`                    // First 8 characters for display
+	Scopes      []string   `json:"scopes"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
