@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/memtensor/memgos/pkg/interfaces"
 	"github.com/memtensor/memgos/pkg/logger"
+	"github.com/memtensor/memgos/pkg/types"
 )
 
 // NATSRetrieverConfig holds configuration for NATS-based retrieval
@@ -339,10 +340,11 @@ func (r *NATSSchedulerRetriever) processRetrievalRequest(request *RetrievalReque
 		return
 	}
 	
-	r.logger.Debug("Retrieval response sent",
-		"request_id", request.ID,
-		"results_count", len(response.Results),
-		"processing_time", response.ProcessingTime)
+	r.logger.Debug("Retrieval response sent", map[string]interface{}{
+		"request_id": request.ID,
+		"results_count": len(response.Results),
+		"processing_time": response.ProcessingTime,
+	})
 }
 
 // performLocalSearch performs search using local resources
@@ -363,7 +365,11 @@ func (r *NATSSchedulerRetriever) performLocalSearch(query string, topK int, meth
 	r.cacheMisses++
 	r.mu.Unlock()
 	
-	r.logger.Debug("Performing local search", "query", query, "top_k", topK, "method", method)
+	r.logger.Debug("Performing local search", map[string]interface{}{
+		"query": query,
+		"top_k": topK,
+		"method": method,
+	})
 	
 	var results []*SearchResult
 	var err error
@@ -406,7 +412,7 @@ func (r *NATSSchedulerRetriever) Search(query string, topK int, method string) (
 	// If local search fails or returns no results, try distributed search
 	distributedResults, err := r.performDistributedSearch(query, topK, method)
 	if err != nil {
-		r.logger.Warn("Distributed search failed, using local results", "error", err)
+		r.logger.Warn("Distributed search failed, using local results", map[string]interface{}{"error": err.Error()})
 		return results, nil // Return local results even if not ideal
 	}
 	
@@ -444,7 +450,7 @@ func (r *NATSSchedulerRetriever) performDistributedSearch(query string, topK int
 	sub, err := r.conn.Subscribe(replySubject, func(msg *nats.Msg) {
 		var response RetrievalResponse
 		if err := json.Unmarshal(msg.Data, &response); err != nil {
-			r.logger.Error("Failed to unmarshal retrieval response", "error", err)
+			r.logger.Error("Failed to unmarshal retrieval response", err, map[string]interface{}{})
 			return
 		}
 		
@@ -480,7 +486,7 @@ func (r *NATSSchedulerRetriever) performDistributedSearch(query string, topK int
 	for {
 		select {
 		case <-ctx.Done():
-			r.logger.Debug("Distributed search timeout", "responses_received", responseCount)
+			r.logger.Debug("Distributed search timeout", map[string]interface{}{"responses_received": responseCount})
 			return allResults, nil
 		case response := <-responses:
 			responseCount++
@@ -553,7 +559,7 @@ func (r *NATSSchedulerRetriever) ReplaceWorkingMemory(
 	// If local reranking fails, try distributed reranking
 	distributedResult, err := r.performDistributedReranking(originalMemory, newMemory, topK, topN, query)
 	if err != nil {
-		r.logger.Warn("Distributed reranking failed, using simple merge", "error", err)
+		r.logger.Warn("Distributed reranking failed, using simple merge", map[string]interface{}{"error": err.Error()})
 		// Fall back to simple merge
 		return r.simpleMergeMemory(originalMemory, newMemory, topK, topN), nil
 	}
@@ -590,9 +596,11 @@ func (r *NATSSchedulerRetriever) performLocalReranking(
 	result := rerankedMemory[:maxItems]
 	
 	r.logger.Debug("Local reranking completed",
-		"original_count", len(originalMemory),
-		"new_count", len(newMemory),
-		"result_count", len(result))
+map[string]interface{}{
+			"original_count": len(originalMemory),
+			"new_count": len(newMemory),
+			"result_count": len(result),
+		})
 	
 	return result, nil
 }
@@ -625,7 +633,7 @@ func (r *NATSSchedulerRetriever) performDistributedReranking(
 	sub, err := r.conn.Subscribe(replySubject, func(msg *nats.Msg) {
 		var response RerankingResponse
 		if err := json.Unmarshal(msg.Data, &response); err != nil {
-			r.logger.Error("Failed to unmarshal reranking response", "error", err)
+			r.logger.Error("Failed to unmarshal reranking response", err, map[string]interface{}{})
 			return
 		}
 		
@@ -785,12 +793,12 @@ func (r *NATSSchedulerRetriever) cacheResults(query string, results []*SearchRes
 func (r *NATSSchedulerRetriever) distributeCacheEntry(cache *DistributedRetrievalCache) {
 	data, err := json.Marshal(cache)
 	if err != nil {
-		r.logger.Error("Failed to marshal cache entry for distribution", "error", err)
+		r.logger.Error("Failed to marshal cache entry for distribution", err, map[string]interface{}{})
 		return
 	}
 	
 	if err := r.conn.Publish(r.config.CacheSubject+".replicate", data); err != nil {
-		r.logger.Error("Failed to distribute cache entry", "error", err)
+		r.logger.Error("Failed to distribute cache entry", err, map[string]interface{}{})
 	}
 }
 
@@ -855,7 +863,10 @@ func (r *NATSSchedulerRetriever) GetCacheStats() map[string]interface{} {
 
 // performTextMemorySearch performs search using text memory method
 func (r *NATSSchedulerRetriever) performTextMemorySearch(query string, topK int) ([]*SearchResult, error) {
-	r.logger.Debug("Performing text memory search", "query", query, "top_k", topK)
+	r.logger.Debug("Performing text memory search", map[string]interface{}{
+		"query": query,
+		"top_k": topK,
+	})
 	
 	results := make([]*SearchResult, 0)
 	
@@ -878,7 +889,10 @@ func (r *NATSSchedulerRetriever) performTextMemorySearch(query string, topK int)
 
 // performTreeTextMemorySearch performs search using tree text memory method
 func (r *NATSSchedulerRetriever) performTreeTextMemorySearch(query string, topK int) ([]*SearchResult, error) {
-	r.logger.Debug("Performing tree text memory search", "query", query, "top_k", topK)
+	r.logger.Debug("Performing tree text memory search", map[string]interface{}{
+		"query": query,
+		"top_k": topK,
+	})
 	
 	results := make([]*SearchResult, 0)
 	
@@ -927,11 +941,12 @@ func (r *NATSSchedulerRetriever) rerankMemory(query string, currentOrder []strin
 	}
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := []types.MessageDict{
+		{Role: types.MessageRoleUser, Content: prompt},
 	}
+	messageList := types.MessageList(messages)
 	
-	response, err := r.chatLLM.Generate(messages)
+	response, err := r.chatLLM.Generate(context.Background(), messageList)
 	if err != nil {
 		return currentOrder, fmt.Errorf("LLM generation failed: %w", err)
 	}

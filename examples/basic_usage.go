@@ -185,8 +185,7 @@ func demonstrateMOSCore(ctx context.Context, tempDir string, logger interfaces.L
 	// Add memories through MOS
 	addRequest := &types.AddMemoryRequest{
 		MemoryContent: stringPtr("MemGOS is a memory operating system for AI applications. It provides unified memory management."),
-		CubeID:        stringPtr("demo-cube"),
-		UserID:        stringPtr(cfg.UserID),
+		UserID:        cfg.UserID,
 	}
 
 	err = mosCore.Add(ctx, addRequest)
@@ -213,7 +212,7 @@ func demonstrateMOSCore(ctx context.Context, tempDir string, logger interfaces.L
 	// Test chat functionality (with mock LLM)
 	chatRequest := &types.ChatRequest{
 		Query:  "What is MemGOS?",
-		UserID: stringPtr(cfg.UserID),
+		UserID: cfg.UserID,
 	}
 
 	chatResponse, err := mosCore.Chat(ctx, chatRequest)

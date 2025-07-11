@@ -11,7 +11,7 @@ import (
 	"github.com/memtensor/memgos/pkg/types"
 )
 
-func main() {
+func llmIntegrationMain() {
 	fmt.Println("MemGOS LLM Integration Demo")
 	fmt.Println("===========================")
 

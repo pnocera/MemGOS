@@ -1,7 +1,6 @@
 package schedulers
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -51,7 +50,7 @@ type GeneralScheduler struct {
 	searchMethod                  string
 	lastActivationMemUpdateTime   time.Time
 	queryList                     []string
-	logger                        *logger.Logger
+	logger                        interfaces.Logger
 }
 
 // NewGeneralScheduler creates a new general scheduler
@@ -72,7 +71,7 @@ func NewGeneralScheduler(config *GeneralSchedulerConfig) *GeneralScheduler {
 		searchMethod:                config.SearchMethod,
 		lastActivationMemUpdateTime: time.Time{},
 		queryList:                   make([]string, 0),
-		logger:                      logger.GetLogger("general-scheduler"),
+		logger:                      logger.NewConsoleLogger("info"),
 	}
 	
 	return scheduler
@@ -95,22 +94,23 @@ func (g *GeneralScheduler) InitializeModules(chatLLM interfaces.LLM) error {
 		return fmt.Errorf("failed to register handlers: %w", err)
 	}
 	
-	g.logger.Info("General scheduler initialized",
-		"top_k", g.topK,
-		"top_n", g.topN,
-		"activation_mem_size", g.activationMemSize,
-		"search_method", g.searchMethod)
+	g.logger.Info("General scheduler initialized", map[string]interface{}{
+		"top_k": g.topK,
+		"top_n": g.topN,
+		"activation_mem_size": g.activationMemSize,
+		"search_method": g.searchMethod,
+	})
 	
 	return nil
 }
 
 // queryMessageHandler processes query messages
 func (g *GeneralScheduler) queryMessageHandler(messages []*modules.ScheduleMessageItem) error {
-	g.logger.Debug("Processing query messages", "count", len(messages))
+	g.logger.Debug("Processing query messages", map[string]interface{}{"count": len(messages)})
 	
 	for _, msg := range messages {
 		if msg.Label != modules.QueryLabel {
-			g.logger.Error("Query handler received wrong message type", "label", msg.Label)
+			g.logger.Error("Query handler received wrong message type", nil, map[string]interface{}{"label": msg.Label})
 			continue
 		}
 		
@@ -119,7 +119,7 @@ func (g *GeneralScheduler) queryMessageHandler(messages []*modules.ScheduleMessa
 		
 		// Process the query
 		if err := g.processSessionTurn(msg.Content, g.topK, g.topN); err != nil {
-			g.logger.Error("Failed to process session turn", "error", err)
+			g.logger.Error("Failed to process session turn", err, map[string]interface{}{})
 			return err
 		}
 		
@@ -131,7 +131,7 @@ func (g *GeneralScheduler) queryMessageHandler(messages []*modules.ScheduleMessa
 		)
 		
 		if err := g.SubmitWebLogs(logItem); err != nil {
-			g.logger.Error("Failed to submit web log", "error", err)
+			g.logger.Error("Failed to submit web log", err, map[string]interface{}{})
 		}
 	}
 	
@@ -140,11 +140,11 @@ func (g *GeneralScheduler) queryMessageHandler(messages []*modules.ScheduleMessa
 
 // answerMessageHandler processes answer messages
 func (g *GeneralScheduler) answerMessageHandler(messages []*modules.ScheduleMessageItem) error {
-	g.logger.Debug("Processing answer messages", "count", len(messages))
+	g.logger.Debug("Processing answer messages", map[string]interface{}{"count": len(messages)})
 	
 	for _, msg := range messages {
 		if msg.Label != modules.AnswerLabel {
-			g.logger.Error("Answer handler received wrong message type", "label", msg.Label)
+			g.logger.Error("Answer handler received wrong message type", nil, map[string]interface{}{"label": msg.Label})
 			continue
 		}
 		
@@ -153,7 +153,7 @@ func (g *GeneralScheduler) answerMessageHandler(messages []*modules.ScheduleMess
 		
 		// Process the answer
 		if err := g.processAnswer(msg.Content); err != nil {
-			g.logger.Error("Failed to process answer", "error", err)
+			g.logger.Error("Failed to process answer", err, map[string]interface{}{})
 			return err
 		}
 		
@@ -165,7 +165,7 @@ func (g *GeneralScheduler) answerMessageHandler(messages []*modules.ScheduleMess
 		)
 		
 		if err := g.SubmitWebLogs(logItem); err != nil {
-			g.logger.Error("Failed to submit web log", "error", err)
+			g.logger.Error("Failed to submit web log", err, map[string]interface{}{})
 		}
 	}
 	
@@ -197,10 +197,11 @@ func (g *GeneralScheduler) processSessionTurn(query string, topK, topN int) erro
 		return fmt.Errorf("intent detection failed: %w", err)
 	}
 	
-	g.logger.Debug("Intent detection result",
-		"trigger_retrieval", intentResult.TriggerRetrieval,
-		"missing_evidence_count", len(intentResult.MissingEvidence),
-		"confidence", intentResult.Confidence)
+	g.logger.Debug("Intent detection result", map[string]interface{}{
+		"trigger_retrieval": intentResult.TriggerRetrieval,
+		"missing_evidence_count": len(intentResult.MissingEvidence),
+		"confidence": intentResult.Confidence,
+	})
 	
 	// If retrieval is triggered, perform search and update working memory
 	if intentResult.TriggerRetrieval {
@@ -229,15 +230,15 @@ func (g *GeneralScheduler) performRetrieval(missingEvidence []string, topK, topN
 	
 	// Search for each piece of missing evidence
 	for _, evidence := range missingEvidence {
-		g.logger.Debug("Searching for missing evidence", "evidence", evidence)
+		g.logger.Debug("Searching for missing evidence", map[string]interface{}{"evidence": evidence})
 		
 		results, err := retriever.Search(evidence, kPerEvidence, g.searchMethod)
 		if err != nil {
-			g.logger.Error("Search failed", "evidence", evidence, "error", err)
+			g.logger.Error("Search failed", err, map[string]interface{}{"evidence": evidence})
 			continue
 		}
 		
-		g.logger.Debug("Search results", "evidence", evidence, "result_count", len(results))
+		g.logger.Debug("Search results", map[string]interface{}{"evidence": evidence, "result_count": len(results)})
 		newCandidates = append(newCandidates, results...)
 	}
 	
@@ -257,13 +258,14 @@ func (g *GeneralScheduler) performRetrieval(missingEvidence []string, topK, topN
 		
 		// Update activation memory
 		if err := g.updateActivationMemory(newOrderMemory); err != nil {
-			g.logger.Error("Failed to update activation memory", "error", err)
+			g.logger.Error("Failed to update activation memory", err, map[string]interface{}{})
 		}
 		
-		g.logger.Info("Working memory updated",
-			"original_count", len(originalMemory),
-			"new_candidates", len(newCandidates),
-			"final_count", len(newOrderMemory))
+		g.logger.Info("Working memory updated", map[string]interface{}{
+			"original_count": len(originalMemory),
+			"new_candidates": len(newCandidates),
+			"final_count": len(newOrderMemory),
+		})
 	}
 	
 	return nil
@@ -279,7 +281,7 @@ func (g *GeneralScheduler) processAnswer(answer string) error {
 	// Update activation memory frequencies based on answer
 	updatedFreqList, err := monitor.UpdateFreq(answer)
 	if err != nil {
-		g.logger.Error("Failed to update frequencies", "error", err)
+		g.logger.Error("Failed to update frequencies", err, map[string]interface{}{})
 		// Continue with existing frequencies
 	}
 	
@@ -295,7 +297,7 @@ func (g *GeneralScheduler) processAnswer(answer string) error {
 		}
 		
 		if err := g.updateActivationMemory(currentMemories); err != nil {
-			g.logger.Error("Failed to update activation memory", "error", err)
+			g.logger.Error("Failed to update activation memory", err, map[string]interface{}{})
 		} else {
 			g.lastActivationMemUpdateTime = now
 		}
@@ -320,7 +322,7 @@ func (g *GeneralScheduler) getCurrentWorkingMemory() ([]string, error) {
 		"Example working memory item 3",
 	}
 	
-	g.logger.Debug("Retrieved working memory", "count", len(workingMemory))
+	g.logger.Debug("Retrieved working memory", map[string]interface{}{"count": len(workingMemory)})
 	return workingMemory, nil
 }
 
@@ -336,9 +338,10 @@ func (g *GeneralScheduler) updateActivationMemory(newMemory []string) error {
 	
 	// This would integrate with the actual memory cube's activation memory
 	// For now, simulate the activation memory update
-	g.logger.Debug("Updating activation memory",
-		"memory_count", len(newMemory),
-		"text_length", len(memoryText))
+	g.logger.Debug("Updating activation memory", map[string]interface{}{
+		"memory_count": len(newMemory),
+		"text_length": len(memoryText),
+	})
 	
 	// In real implementation, this would:
 	// 1. Get activation memory from memory cube
@@ -352,7 +355,7 @@ func (g *GeneralScheduler) updateActivationMemory(newMemory []string) error {
 		return fmt.Errorf("failed to save activation memory: %w", err)
 	}
 	
-	g.logger.Info("Activation memory updated successfully", "items", len(newMemory))
+	g.logger.Info("Activation memory updated successfully", map[string]interface{}{"items": len(newMemory)})
 	return nil
 }
 
@@ -371,7 +374,7 @@ func (g *GeneralScheduler) assembleMemoryText(memoryItems []string) string {
 func (g *GeneralScheduler) saveActivationMemoryToDisk(memoryText string) error {
 	// In real implementation, this would save to g.actMemDumpPath
 	// For now, just log the operation
-	g.logger.Debug("Saving activation memory to disk", "path", g.actMemDumpPath)
+	g.logger.Debug("Saving activation memory to disk", map[string]interface{}{"path": g.actMemDumpPath})
 	
 	// Placeholder: Create directory if it doesn't exist and save file
 	// os.MkdirAll(filepath.Dir(g.actMemDumpPath), 0755)

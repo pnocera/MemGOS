@@ -15,7 +15,9 @@ func runAPIServerImplementation(ctx context.Context, mosCore interfaces.MOSCore,
 	logger.Info("Starting MemGOS API server")
 	
 	// Create the API server instance
-	server := api.NewServer(mosCore, cfg, logger)
+	// TODO: Initialize proper UserManager implementation
+	// For now, pass nil as authManager parameter
+	server := api.NewServer(mosCore, cfg, logger, nil)
 	
 	// Start the server (this will block until context is cancelled)
 	return server.Start(ctx)

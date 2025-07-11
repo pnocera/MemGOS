@@ -871,18 +871,4 @@ func getStringValue(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func getFloat64Value(m map[string]interface{}, key string) float64 {
-	if val, ok := m[key]; ok {
-		switch v := val.(type) {
-		case float64:
-			return v
-		case float32:
-			return float64(v)
-		case int:
-			return float64(v)
-		case int64:
-			return float64(v)
-		}
-	}
-	return 0.0
-}
+// getFloat64Value function removed - using the one from monitor.go

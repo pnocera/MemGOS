@@ -10,7 +10,7 @@ import (
 	"github.com/memtensor/memgos/pkg/graphdb"
 )
 
-func main() {
+func graphDBMain() {
 	// Create graph database configuration
 	config := graphdb.NewConfigBuilder().
 		Provider(graphdb.ProviderNeo4j).

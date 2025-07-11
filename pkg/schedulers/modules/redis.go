@@ -76,7 +76,7 @@ func (r *RedisSchedulerModule) InitializeRedis() error {
 	defer r.mu.Unlock()
 	
 	addr := fmt.Sprintf("%s:%d", r.config.Host, r.config.Port)
-	r.logger.Info("Connecting to Redis", "address", addr, "db", r.config.DB)
+	r.logger.Info("Connecting to Redis", map[string]interface{}{"address": addr, "db": r.config.DB})
 	
 	r.client = redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -95,11 +95,11 @@ func (r *RedisSchedulerModule) InitializeRedis() error {
 		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 	
-	r.logger.Info("Redis connection established", "response", pong)
+	r.logger.Info("Redis connection established", map[string]interface{}{"response": pong})
 	
 	// Initialize stream and consumer group
 	if err := r.initializeStream(); err != nil {
-		r.logger.Warn("Failed to initialize stream", "error", err)
+		r.logger.Warn("Failed to initialize stream", map[string]interface{}{"error": err.Error()})
 		// Non-critical error, continue
 	}
 	
@@ -119,7 +119,7 @@ func (r *RedisSchedulerModule) initializeStream() error {
 	// Trim stream to capacity
 	err = r.client.XTrimMaxLen(ctx, r.streamName, int64(r.queryListCapacity)).Err()
 	if err != nil {
-		r.logger.Warn("Failed to trim stream", "error", err)
+		r.logger.Warn("Failed to trim stream", map[string]interface{}{"error": err.Error()})
 	}
 	
 	return nil
@@ -167,10 +167,11 @@ func (r *RedisSchedulerModule) AddMessageToStream(message *ScheduleMessageItem) 
 		return "", fmt.Errorf("failed to add message to stream: %w", err)
 	}
 	
-	r.logger.Debug("Message added to stream", 
-		"stream", r.streamName, 
-		"id", id, 
-		"label", message.Label)
+	r.logger.Debug("Message added to stream", map[string]interface{}{
+		"stream": r.streamName, 
+		"id": id, 
+		"label": message.Label,
+	})
 	
 	return id, nil
 }
@@ -187,7 +188,7 @@ func (r *RedisSchedulerModule) ConsumeMessageStream(handler func(*ScheduleMessag
 			return nil
 		default:
 			if err := r.consumeBatch(handler); err != nil {
-				r.logger.Error("Error consuming messages", "error", err)
+				r.logger.Error("Error consuming messages", err, map[string]interface{}{})
 				time.Sleep(1 * time.Second) // Backoff on error
 			}
 		}
@@ -220,17 +221,17 @@ func (r *RedisSchedulerModule) consumeBatch(handler func(*ScheduleMessageItem) e
 	for _, stream := range streams {
 		for _, message := range stream.Messages {
 			if err := r.processMessage(message, handler); err != nil {
-				r.logger.Error("Error processing message", 
-					"message_id", message.ID, 
-					"error", err)
+				r.logger.Error("Error processing message", err, map[string]interface{}{
+					"message_id": message.ID,
+				})
 				continue
 			}
 			
 			// Acknowledge message
 			if err := r.client.XAck(ctx, r.streamName, r.consumerGroup, message.ID).Err(); err != nil {
-				r.logger.Error("Failed to acknowledge message", 
-					"message_id", message.ID, 
-					"error", err)
+				r.logger.Error("Failed to acknowledge message", err, map[string]interface{}{
+					"message_id": message.ID,
+				})
 			}
 		}
 	}
@@ -305,13 +306,14 @@ func (r *RedisSchedulerModule) StartListening(handler func(*ScheduleMessageItem)
 		}()
 		
 		if err := r.ConsumeMessageStream(handler); err != nil {
-			r.logger.Error("Stream listener error", "error", err)
+			r.logger.Error("Stream listener error", err, map[string]interface{}{})
 		}
 	}()
 	
-	r.logger.Info("Redis stream listener started", 
-		"stream", r.streamName, 
-		"group", r.consumerGroup)
+	r.logger.Info("Redis stream listener started", map[string]interface{}{
+		"stream": r.streamName, 
+		"group": r.consumerGroup,
+	})
 	
 	return nil
 }
@@ -335,11 +337,11 @@ func (r *RedisSchedulerModule) StopListening() error {
 	for {
 		select {
 		case <-timeout:
-			r.logger.Warn("Timeout waiting for listener to stop")
+			r.logger.Warn("Timeout waiting for listener to stop", map[string]interface{}{})
 			return fmt.Errorf("timeout waiting for listener to stop")
 		case <-ticker.C:
 			if !r.listenerRunning {
-				r.logger.Info("Redis stream listener stopped")
+				r.logger.Info("Redis stream listener stopped", map[string]interface{}{})
 				return nil
 			}
 		}
@@ -408,7 +410,7 @@ func (r *RedisSchedulerModule) PublishEvent(channel string, data interface{}) er
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 	
-	r.logger.Debug("Event published", "channel", channel)
+	r.logger.Debug("Event published", map[string]interface{}{"channel": channel})
 	return nil
 }
 
@@ -429,9 +431,9 @@ func (r *RedisSchedulerModule) SubscribeToEvents(channels []string, handler func
 			return nil
 		case msg := <-ch:
 			if err := handler(msg.Channel, []byte(msg.Payload)); err != nil {
-				r.logger.Error("Event handler error", 
-					"channel", msg.Channel, 
-					"error", err)
+				r.logger.Error("Event handler error", err, map[string]interface{}{
+					"channel": msg.Channel,
+				})
 			}
 		}
 	}

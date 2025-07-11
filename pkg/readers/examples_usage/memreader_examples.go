@@ -260,15 +260,24 @@ func ExampleConfigurationProfiles() {
 		fmt.Printf("    Summarization: %t\n", config.Summarization)
 		
 		// Create reader with this profile
-		factory.SetConfig(profile, config)
-		reader, err := factory.CreateReaderFromConfig()
+		// Convert profile to appropriate reader type
+		var readerType readers.ReaderType
+		switch profile {
+		case "simple":
+			readerType = readers.ReaderTypeSimple
+		case "advanced":
+			readerType = readers.ReaderTypeAdvanced
+		default:
+			readerType = readers.ReaderTypeSimple
+		}
+		reader, err := factory.CreateReader(readerType)
 		if err != nil {
 			log.Printf("Failed to create reader for profile %s: %v", profile, err)
 			continue
 		}
 		
 		// Test basic functionality
-		memories := createSampleMemories()
+		_ = createSampleMemories()
 		query := &readers.ReadQuery{
 			Query:  "test query",
 			TopK:   5,

@@ -55,7 +55,7 @@ type BaseScheduler struct {
 	currentMemCubeID     string
 	currentMemCube       interface{} // Will be GeneralMemCube interface
 	
-	logger               *logger.Logger
+	logger               interfaces.Logger
 	startTime            time.Time
 }
 
@@ -78,7 +78,7 @@ func NewBaseScheduler(config *BaseSchedulerConfig) *BaseScheduler {
 		consumerCancel:         cancel,
 		consumerRunning:        false,
 		consumeInterval:        config.ConsumeIntervalSeconds,
-		logger:                 logger.GetLogger("base-scheduler"),
+		logger:                 logger.NewConsoleLogger("info"),
 		startTime:              time.Now(),
 	}
 	
@@ -108,14 +108,14 @@ func (b *BaseScheduler) InitializeModules(chatLLM interfaces.LLM) error {
 	
 	// Initialize NATS connection
 	if err := b.InitializeNATS(); err != nil {
-		b.logger.Warn("Failed to initialize NATS", "error", err)
+		b.logger.Warn("Failed to initialize NATS", map[string]interface{}{"error": err.Error()})
 		// Continue without NATS - scheduler can work in local mode
 	}
 	
-	b.logger.Info("Base scheduler modules initialized",
-		"max_workers", b.maxWorkers,
-		"parallel_dispatch", b.enableParallelDispatch,
-		"consume_interval", b.consumeInterval)
+	b.logger.Info("Base scheduler modules initialized", map[string]interface{}{
+		"max_workers": b.maxWorkers,
+		"parallel_dispatch": b.enableParallelDispatch,
+		"consume_interval": b.consumeInterval})
 	
 	return nil
 }
@@ -133,9 +133,9 @@ func (b *BaseScheduler) SubmitMessages(messages ...*modules.ScheduleMessageItem)
 		
 		select {
 		case b.memosMessageQueue <- message:
-			b.logger.Debug("Message submitted", 
-				"label", message.Label, 
-				"content_length", len(message.Content))
+			b.logger.Debug("Message submitted", map[string]interface{}{
+				"label": message.Label, 
+				"content_length": len(message.Content)})
 		case <-time.After(5 * time.Second):
 			return fmt.Errorf("timeout submitting message with label: %s", message.Label)
 		}
@@ -157,9 +157,9 @@ func (b *BaseScheduler) SubmitWebLogs(messages ...*modules.ScheduleLogForWebItem
 		
 		select {
 		case b.webLogMessageQueue <- message:
-			b.logger.Debug("Web log submitted", 
-				"title", message.LogTitle, 
-				"content_length", len(message.LogContent))
+			b.logger.Debug("Web log submitted", map[string]interface{}{
+				"title": message.LogTitle, 
+				"content_length": len(message.LogContent)})
 		case <-time.After(5 * time.Second):
 			return fmt.Errorf("timeout submitting web log: %s", message.LogTitle)
 		}
@@ -197,7 +197,7 @@ func (b *BaseScheduler) messageConsumer() {
 			messages := b.collectMessages()
 			if len(messages) > 0 {
 				if err := b.dispatchMessages(messages); err != nil {
-					b.logger.Error("Failed to dispatch messages", "error", err)
+					b.logger.Error("Failed to dispatch messages", err)
 					if b.monitor != nil {
 						b.monitor.IncrementErrorCount()
 					}
@@ -270,17 +270,17 @@ func (b *BaseScheduler) Stop() error {
 	
 	// Stop dispatcher
 	if err := b.dispatcher.Stop(); err != nil {
-		b.logger.Error("Failed to stop dispatcher", "error", err)
+		b.logger.Error("Failed to stop dispatcher", err)
 	}
 	
 	// Stop NATS listener if running
 	if err := b.StopListening(); err != nil {
-		b.logger.Error("Failed to stop NATS listener", "error", err)
+		b.logger.Error("Failed to stop NATS listener", err)
 	}
 	
 	// Close NATS connection
 	if err := b.Close(); err != nil {
-		b.logger.Error("Failed to close NATS connection", "error", err)
+		b.logger.Error("Failed to close NATS connection", err)
 	}
 	
 	b.logger.Info("Base scheduler stopped")
@@ -342,9 +342,9 @@ func (b *BaseScheduler) SetCurrentSession(userID, memCubeID string, memCube inte
 		b.retriever.SetMemCube(memCube)
 	}
 	
-	b.logger.Debug("Session updated", 
-		"user_id", userID, 
-		"mem_cube_id", memCubeID)
+	b.logger.Debug("Session updated", map[string]interface{}{
+		"user_id": userID, 
+		"mem_cube_id": memCubeID})
 }
 
 // GetCurrentSession returns the current session information

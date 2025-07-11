@@ -1,0 +1,1 @@
+./claude-flow hive-mind spawn "The goal is to fix the golang errors in every .go file in this repo. open a github issue in https://github.com/pnocera/MemGOS repo.let each agent put their reportings in this github issue after each action." --claude

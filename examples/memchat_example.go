@@ -5,18 +5,16 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/memtensor/memgos/pkg/chat"
-	"github.com/memtensor/memgos/pkg/config"
-	"github.com/memtensor/memgos/pkg/memory"
 	"github.com/memtensor/memgos/pkg/types"
+	"github.com/memtensor/memgos/pkg/interfaces"
 )
 
-func main() {
+func memChatMain() {
 	fmt.Println("🤖 MemChat System Demo")
-	fmt.Println("=" * 50)
+	fmt.Println("====================================================")
 	
 	ctx := context.Background()
 	
@@ -35,7 +33,7 @@ func main() {
 	
 	for _, example := range examples {
 		fmt.Printf("\n📋 Running: %s\n", example.name)
-		fmt.Println("-" * 30)
+		fmt.Println("------------------------------")
 		
 		if err := example.fn(ctx); err != nil {
 			log.Printf("❌ Error in %s: %v", example.name, err)

@@ -48,19 +48,19 @@ type Scheduler interface {
 
 // SchedulerFactory creates and configures different types of schedulers
 type SchedulerFactory struct {
-	logger *logger.Logger
+	logger interfaces.Logger
 }
 
 // NewSchedulerFactory creates a new scheduler factory
 func NewSchedulerFactory() *SchedulerFactory {
 	return &SchedulerFactory{
-		logger: logger.GetLogger("scheduler-factory"),
+		logger: logger.NewConsoleLogger("info"),
 	}
 }
 
 // CreateScheduler creates a scheduler of the specified type with the given configuration
 func (f *SchedulerFactory) CreateScheduler(schedulerType SchedulerType, config interface{}) (Scheduler, error) {
-	f.logger.Info("Creating scheduler", "type", schedulerType)
+	f.logger.Info("Creating scheduler", map[string]interface{}{"type": string(schedulerType)})
 	
 	switch schedulerType {
 	case GeneralSchedulerType:
@@ -93,10 +93,10 @@ func (f *SchedulerFactory) createGeneralScheduler(config interface{}) (Scheduler
 	}
 	
 	scheduler := NewGeneralScheduler(generalConfig)
-	f.logger.Info("GeneralScheduler created successfully",
-		"top_k", generalConfig.TopK,
-		"top_n", generalConfig.TopN,
-		"activation_mem_size", generalConfig.ActivationMemSize)
+	f.logger.Info("GeneralScheduler created successfully", map[string]interface{}{
+		"top_k": generalConfig.TopK,
+		"top_n": generalConfig.TopN,
+		"activation_mem_size": generalConfig.ActivationMemSize})
 	
 	return scheduler, nil
 }
@@ -122,9 +122,9 @@ func (f *SchedulerFactory) createBaseScheduler(config interface{}) (Scheduler, e
 	}
 	
 	scheduler := NewBaseScheduler(baseConfig)
-	f.logger.Info("BaseScheduler created successfully",
-		"max_workers", baseConfig.ThreadPoolMaxWorkers,
-		"parallel_dispatch", baseConfig.EnableParallelDispatch)
+	f.logger.Info("BaseScheduler created successfully", map[string]interface{}{
+		"max_workers": baseConfig.ThreadPoolMaxWorkers,
+		"parallel_dispatch": baseConfig.EnableParallelDispatch})
 	
 	return scheduler, nil
 }
@@ -363,7 +363,7 @@ func (f *SchedulerFactory) CreateSchedulerWithLLM(schedulerType SchedulerType, c
 		return nil, fmt.Errorf("failed to initialize scheduler modules: %w", err)
 	}
 	
-	f.logger.Info("Scheduler created and initialized with LLM", "type", schedulerType)
+	f.logger.Info("Scheduler created and initialized with LLM", map[string]interface{}{"type": schedulerType})
 	return scheduler, nil
 }
 
@@ -378,7 +378,7 @@ func (f *SchedulerFactory) CreateAutoStartScheduler(schedulerType SchedulerType,
 		return nil, fmt.Errorf("failed to start scheduler: %w", err)
 	}
 	
-	f.logger.Info("Scheduler created, initialized, and started", "type", schedulerType)
+	f.logger.Info("Scheduler created, initialized, and started", map[string]interface{}{"type": schedulerType})
 	return scheduler, nil
 }
 

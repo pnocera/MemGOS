@@ -1,12 +1,14 @@
 package modules
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/memtensor/memgos/pkg/interfaces"
+	"github.com/memtensor/memgos/pkg/types"
 )
 
 // SchedulerRetriever handles memory retrieval and reranking operations
@@ -43,7 +45,7 @@ func NewSchedulerRetriever(chatLLM interfaces.LLM) *SchedulerRetriever {
 	
 	// Initialize default templates
 	if err := retriever.InitializeDefaultTemplates(); err != nil {
-		retriever.logger.Error("Failed to initialize templates", "error", err)
+		retriever.logger.Error("Failed to initialize templates", err, map[string]interface{}{})
 	}
 	
 	return retriever
@@ -71,11 +73,11 @@ func (r *SchedulerRetriever) Search(query string, topK int, method string) ([]*S
 	
 	// Check cache first
 	if cached := r.getCachedResults(query); cached != nil && !cached.IsExpired() {
-		r.logger.Debug("Using cached search results", "query", query)
+		r.logger.Debug("Using cached search results", map[string]interface{}{"query": query})
 		return cached.Results, nil
 	}
 	
-	r.logger.Debug("Performing search", "query", query, "top_k", topK, "method", method)
+	r.logger.Debug("Performing search", map[string]interface{}{"query": query, "top_k": topK, "method": method})
 	
 	var results []*SearchResult
 	var err error
@@ -103,7 +105,7 @@ func (r *SchedulerRetriever) Search(query string, topK int, method string) ([]*S
 func (r *SchedulerRetriever) performTextMemorySearch(query string, topK int) ([]*SearchResult, error) {
 	// This would integrate with the actual text memory implementation
 	// For now, return a placeholder implementation
-	r.logger.Debug("Performing text memory search", "query", query, "top_k", topK)
+	r.logger.Debug("Performing text memory search", map[string]interface{}{"query": query, "top_k": topK})
 	
 	// Placeholder: In real implementation, this would call the memory cube's search method
 	results := make([]*SearchResult, 0)
@@ -128,7 +130,7 @@ func (r *SchedulerRetriever) performTextMemorySearch(query string, topK int) ([]
 // performTreeTextMemorySearch performs search using tree text memory method
 func (r *SchedulerRetriever) performTreeTextMemorySearch(query string, topK int) ([]*SearchResult, error) {
 	// This would integrate with the actual tree text memory implementation
-	r.logger.Debug("Performing tree text memory search", "query", query, "top_k", topK)
+	r.logger.Debug("Performing tree text memory search", map[string]interface{}{"query": query, "top_k": topK})
 	
 	// Placeholder: In real implementation, this would:
 	// 1. Search LongTermMemory
@@ -200,10 +202,11 @@ func (r *SchedulerRetriever) ReplaceWorkingMemory(
 	maxItems := min(len(rerankedMemory), topN+topK)
 	result := rerankedMemory[:maxItems]
 	
-	r.logger.Debug("Working memory replaced", 
-		"original_count", len(originalMemory),
-		"new_count", len(newMemory),
-		"result_count", len(result))
+	r.logger.Debug("Working memory replaced", map[string]interface{}{ 
+		"original_count": len(originalMemory),
+		"new_count": len(newMemory),
+		"result_count": len(result),
+	})
 	
 	return result, nil
 }
@@ -222,11 +225,12 @@ func (r *SchedulerRetriever) rerankMemory(query string, currentOrder []string, s
 	}
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := []types.MessageDict{
+		{Role: types.MessageRoleUser, Content: prompt},
 	}
+	messageList := types.MessageList(messages)
 	
-	response, err := r.chatLLM.Generate(messages)
+	response, err := r.chatLLM.Generate(context.Background(), messageList)
 	if err != nil {
 		return currentOrder, fmt.Errorf("LLM generation failed: %w", err)
 	}
