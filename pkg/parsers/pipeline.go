@@ -12,7 +12,6 @@ import (
 
 	"github.com/memtensor/memgos/pkg/chunkers"
 	"github.com/memtensor/memgos/pkg/interfaces"
-	"github.com/memtensor/memgos/pkg/logger"
 	"github.com/memtensor/memgos/pkg/types"
 )
 
@@ -21,7 +20,7 @@ type ProcessingPipeline struct {
 	parserFactory  *ParserFactory
 	chunkerFactory *chunkers.ChunkerFactory
 	embedder       interfaces.Embedder
-	logger         logger.Logger
+	logger         interfaces.Logger
 	config         *PipelineConfig
 	
 	// Processing statistics
@@ -94,7 +93,7 @@ type PipelineStats struct {
 }
 
 // NewProcessingPipeline creates a new document processing pipeline
-func NewProcessingPipeline(embedder interfaces.Embedder, logger logger.Logger, config *PipelineConfig) (*ProcessingPipeline, error) {
+func NewProcessingPipeline(embedder interfaces.Embedder, logger interfaces.Logger, config *PipelineConfig) (*ProcessingPipeline, error) {
 	if config == nil {
 		config = DefaultPipelineConfig()
 	}

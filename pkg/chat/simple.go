@@ -75,7 +75,7 @@ func NewSimpleMemChat(config *MemChatConfig) (*SimpleMemChat, error) {
 	}
 	
 	// Create logger
-	chatLogger := logger.NewLogger("SimpleMemChat")
+	chatLogger := logger.NewLogger()
 	
 	// Create LLM
 	llmConfig := &llm.LLMConfig{

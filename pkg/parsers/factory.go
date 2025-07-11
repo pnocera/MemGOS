@@ -7,6 +7,7 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ParserFactory provides a factory for creating different types of parsers

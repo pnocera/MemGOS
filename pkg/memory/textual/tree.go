@@ -174,18 +174,15 @@ func (ttm *TreeTextMemory) Add(ctx context.Context, memories []*types.TextualMem
 		
 		// Add to graph
 		if err := ttm.addToGraph(ctx, memory); err != nil {
-			ttm.logger.Error("Failed to add memory to graph", map[string]interface{}{
+			ttm.logger.Error("Failed to add memory to graph", err, map[string]interface{}{
 				"memory_id": memory.ID,
-				"error":     err.Error(),
 			})
 		}
 	}
 	
 	// Update search index
 	if err := ttm.updateSearchIndex(memories); err != nil {
-		ttm.logger.Error("Failed to update search index", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ttm.logger.Error("Failed to update search index", err, map[string]interface{}{})
 	}
 	
 	ttm.logger.Info("Added tree memories", map[string]interface{}{
@@ -265,9 +262,7 @@ func (ttm *TreeTextMemory) fineSearch(ctx context.Context, req *SearchRequest) (
 	// Parse query into structured goals
 	goals, err := ttm.searcher.taskGoalParser.ParseQuery(ctx, req.Query)
 	if err != nil {
-		ttm.logger.Error("Failed to parse query", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ttm.logger.Error("Failed to parse query", err, map[string]interface{}{})
 		// Fall back to fast search
 		return ttm.fastSearch(ctx, req)
 	}
@@ -281,9 +276,7 @@ func (ttm *TreeTextMemory) fineSearch(ctx context.Context, req *SearchRequest) (
 	// Use LLM for reranking
 	rerankedResults, err := ttm.searcher.reranker.Rerank(ctx, stage1Results, goals)
 	if err != nil {
-		ttm.logger.Error("Failed to rerank results", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ttm.logger.Error("Failed to rerank results", err, map[string]interface{}{})
 		// Use original results
 		rerankedResults = stage1Results
 	}
@@ -296,9 +289,7 @@ func (ttm *TreeTextMemory) fineSearch(ctx context.Context, req *SearchRequest) (
 	// Apply reasoning
 	finalResults, err := ttm.searcher.reasoner.Reason(ctx, rerankedResults, goals)
 	if err != nil {
-		ttm.logger.Error("Failed to reason about results", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ttm.logger.Error("Failed to reason about results", err, map[string]interface{}{})
 		finalResults = rerankedResults
 	}
 	
@@ -312,9 +303,7 @@ func (ttm *TreeTextMemory) fineSearch(ctx context.Context, req *SearchRequest) (
 	if ttm.internetRetriever != nil {
 		internetResults, err := ttm.retrieveFromInternet(ctx, req.Query, req.TopK/2)
 		if err != nil {
-			ttm.logger.Error("Failed to retrieve from internet", map[string]interface{}{
-				"error": err.Error(),
-			})
+			ttm.logger.Error("Failed to retrieve from internet", err, map[string]interface{}{})
 		} else {
 			memories = append(memories, internetResults...)
 		}
@@ -336,7 +325,7 @@ func (ttm *TreeTextMemory) semanticSearch(ctx context.Context, req *SearchReques
 	}
 	
 	// Generate query embedding
-	queryEmbedding, err := ttm.embedder.Embed(ctx, []string{req.Query})
+	queryEmbedding, err := ttm.embedder.Embed(ctx, req.Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
@@ -348,7 +337,7 @@ func (ttm *TreeTextMemory) semanticSearch(ctx context.Context, req *SearchReques
 	candidates := ttm.getCandidateMemories(req.MemoryType)
 	
 	// Calculate semantic similarity
-	results := ttm.semanticSimilaritySearch(queryEmbedding[0], candidates, req.TopK)
+	results := ttm.semanticSimilaritySearch([]float32(queryEmbedding), candidates, req.TopK)
 	
 	// Convert to memory items
 	memories := make([]*types.TextualMemoryItem, len(results))
@@ -372,7 +361,7 @@ func (ttm *TreeTextMemory) GetRelevantSubgraph(ctx context.Context, query string
 	}
 	
 	// Generate query embedding
-	queryEmbedding, err := ttm.embedder.Embed(ctx, []string{query})
+	queryEmbedding, err := ttm.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
@@ -381,7 +370,7 @@ func (ttm *TreeTextMemory) GetRelevantSubgraph(ctx context.Context, query string
 	defer ttm.graph.mu.RUnlock()
 	
 	// Find most similar nodes
-	similarNodes := ttm.findSimilarNodes(queryEmbedding[0], topK)
+	similarNodes := ttm.findSimilarNodes([]float32(queryEmbedding), topK)
 	
 	// Build subgraph
 	subgraph := ttm.buildSubgraph(similarNodes, depth)
@@ -557,9 +546,8 @@ func (ttm *TreeTextMemory) Update(ctx context.Context, id string, memory *types.
 	
 	// Update graph
 	if err := ttm.updateGraphNode(ctx, memory); err != nil {
-		ttm.logger.Error("Failed to update graph node", map[string]interface{}{
+		ttm.logger.Error("Failed to update graph node", err, map[string]interface{}{
 			"memory_id": id,
-			"error":     err.Error(),
 		})
 	}
 	
@@ -732,9 +720,7 @@ func (ttm *TreeTextMemory) Drop(ctx context.Context, keepLastN int) error {
 	
 	// Clean up old backups
 	if err := ttm.cleanupOldBackups(keepLastN); err != nil {
-		ttm.logger.Error("Failed to clean up old backups", map[string]interface{}{
-			"error": err.Error(),
-		})
+		ttm.logger.Error("Failed to clean up old backups", err, map[string]interface{}{})
 	}
 	
 	// Delete all memories
@@ -909,9 +895,9 @@ func (ttm *TreeTextMemory) updateSearchIndex(memories []*types.TextualMemoryItem
 		
 		// Generate and store embedding if embedder is available
 		if ttm.embedder != nil {
-			embeddings, err := ttm.embedder.Embed(context.Background(), []string{memory.Memory})
-			if err == nil && len(embeddings) > 0 {
-				ttm.searchIndex.embeddings[memory.ID] = embeddings[0]
+			embedding, err := ttm.embedder.Embed(context.Background(), memory.Memory)
+			if err == nil {
+				ttm.searchIndex.embeddings[memory.ID] = embedding
 			}
 		}
 		
@@ -1134,14 +1120,14 @@ func (ttm *TreeTextMemory) retrieveFromInternet(ctx context.Context, query strin
 		return nil, nil
 	}
 	
-	// Retrieve from internet
-	internetResults, err := ttm.internetRetriever.Retrieve(ctx, query, topK)
+	// Retrieve from internet using Search method
+	internetResults, err := ttm.internetRetriever.Search(ctx, query, topK)
 	if err != nil {
 		return nil, err
 	}
 	
 	// Convert to textual memory items
-	memories := make([]*types.TextualMemoryItem, 0)
+	memories := make([]*types.TextualMemoryItem, 0, len(internetResults))
 	for _, result := range internetResults {
 		memory := &types.TextualMemoryItem{
 			ID:       ttm.generateID(),
@@ -1149,7 +1135,6 @@ func (ttm *TreeTextMemory) retrieveFromInternet(ctx context.Context, query strin
 			Metadata: map[string]interface{}{
 				"url":           result.URL,
 				"title":         result.Title,
-				"source":        result.Source,
 				"retrieved_at":  result.RetrievedAt,
 				"memory_type":   string(MemoryTypeInternet),
 				"internet_score": result.Score,

@@ -182,9 +182,8 @@ func (kvcm *KVCacheMemory) Add(ctx context.Context, memories []*types.Activation
 			// Convert from map to KVCacheData
 			kvData := &KVCacheData{}
 			if err := kvcm.convertMapToKVCache(kvMap, kvData); err != nil {
-				kvcm.logger.Error("Failed to convert KV cache data", map[string]interface{}{
+				kvcm.logger.Error("Failed to convert KV cache data", err, map[string]interface{}{
 					"memory_id": memory.ID,
-					"error":     err.Error(),
 				})
 			} else {
 				kvcm.kvCaches[memory.ID] = kvData
@@ -212,9 +211,7 @@ func (kvcm *KVCacheMemory) Add(ctx context.Context, memories []*types.Activation
 		
 		// Check if eviction is needed
 		if err := kvcm.checkEviction(); err != nil {
-			kvcm.logger.Error("Failed to check eviction", map[string]interface{}{
-				"error": err.Error(),
-			})
+			kvcm.logger.Error("Failed to check eviction", err, map[string]interface{}{})
 		}
 	}
 	
@@ -576,9 +573,8 @@ func (kvcm *KVCacheMemory) Compress(ctx context.Context, compressionRatio float6
 		// Compress the cache data
 		compressedData, err := kvcm.compressor.CompressData(memory.Memory)
 		if err != nil {
-			kvcm.logger.Error("Failed to compress memory", map[string]interface{}{
+			kvcm.logger.Error("Failed to compress memory", err, map[string]interface{}{
 				"memory_id": id,
-				"error":     err.Error(),
 			})
 			continue
 		}
@@ -875,9 +871,8 @@ func (kvcm *KVCacheMemory) optimizeDeviceAllocations() error {
 				if accessTime, exists := kvcm.cacheManager.accessTimes[id]; exists {
 					if time.Since(accessTime) > time.Hour {
 						if err := kvcm.MoveToDevice(memory, "cpu"); err != nil {
-							kvcm.logger.Error("Failed to move memory to CPU", map[string]interface{}{
+							kvcm.logger.Error("Failed to move memory to CPU", err, map[string]interface{}{
 								"memory_id": id,
-								"error":     err.Error(),
 							})
 						}
 					}

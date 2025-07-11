@@ -35,7 +35,7 @@ const (
 
 // MemoryFactory provides factory methods for creating different types of memories
 type MemoryFactory struct {
-	config           *config.Config
+	config           *config.MOSConfig
 	logger           interfaces.Logger
 	metrics          interfaces.Metrics
 	embedderRegistry map[string]interfaces.Embedder
@@ -74,7 +74,7 @@ type MemoryInstance struct {
 }
 
 // NewMemoryFactory creates a new memory factory
-func NewMemoryFactory(cfg *config.Config, logger interfaces.Logger, metrics interfaces.Metrics) *MemoryFactory {
+func NewMemoryFactory(cfg *config.MOSConfig, logger interfaces.Logger, metrics interfaces.Metrics) *MemoryFactory {
 	return &MemoryFactory{
 		config:           cfg,
 		logger:           logger,
@@ -168,9 +168,8 @@ func (mf *MemoryFactory) CreateMemory(memoryConfig *MemoryConfig) (*MemoryInstan
 	// Optimize if requested
 	if memoryConfig.OptimizeOnInit {
 		if err := mf.optimizeMemory(memory); err != nil {
-			mf.logger.Error("Failed to optimize memory on initialization", map[string]interface{}{
+			mf.logger.Error("Failed to optimize memory on initialization", err, map[string]interface{}{
 				"memory_id": instance.ID,
-				"error":     err.Error(),
 			})
 		}
 	}

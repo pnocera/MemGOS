@@ -262,18 +262,18 @@ func (r *RedisSchedulerModule) redisMessageToScheduleItem(msg redis.XMessage) (*
 	}
 	
 	return &ScheduleMessageItem{
-		ItemID:    getStringValue(values, "item_id"),
-		UserID:    getStringValue(values, "user_id"),
-		MemCubeID: getStringValue(values, "mem_cube_id"),
-		Label:     getStringValue(values, "label"),
-		Content:   getStringValue(values, "content"),
+		ItemID:    getRedisStringValue(values, "item_id"),
+		UserID:    getRedisStringValue(values, "user_id"),
+		MemCubeID: getRedisStringValue(values, "mem_cube_id"),
+		Label:     getRedisStringValue(values, "label"),
+		Content:   getRedisStringValue(values, "content"),
 		Timestamp: timestamp,
 		// Note: MemCube is not serialized in Redis
 	}, nil
 }
 
-// getStringValue safely extracts string value from Redis message values
-func getStringValue(values map[string]interface{}, key string) string {
+// getRedisStringValue safely extracts string value from Redis message values  
+func getRedisStringValue(values map[string]interface{}, key string) string {
 	if val, ok := values[key]; ok {
 		if str, ok := val.(string); ok {
 			return str

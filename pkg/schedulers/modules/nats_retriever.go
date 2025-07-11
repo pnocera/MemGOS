@@ -69,7 +69,7 @@ type NATSSchedulerRetriever struct {
 	totalRetrievals         int64
 	avgRetrievalTime        time.Duration
 	
-	logger                  *logger.Logger
+	logger                  interfaces.Logger
 	startTime               time.Time
 	nodeID                  string
 }
@@ -174,14 +174,14 @@ func NewNATSSchedulerRetriever(conn *nats.Conn, js jetstream.JetStream, chatLLM 
 		distributedHits:     0,
 		totalRetrievals:     0,
 		avgRetrievalTime:    0,
-		logger:              logger.GetLogger("nats-retriever"),
+		logger:              logger.NewLogger(),
 		startTime:           time.Now(),
 		nodeID:              nodeID,
 	}
 	
 	// Initialize default templates
 	if err := retriever.InitializeDefaultTemplates(); err != nil {
-		retriever.logger.Error("Failed to initialize templates", "error", err)
+		retriever.logger.Error("Failed to initialize templates", err, map[string]interface{}{})
 	}
 	
 	return retriever
@@ -201,7 +201,7 @@ func (r *NATSSchedulerRetriever) InitializeRetrievalServices() error {
 	// Subscribe to cache requests if distributed cache is enabled
 	if r.config.DistributedCacheEnabled {
 		if err := r.subscribeToDistributedCache(); err != nil {
-			r.logger.Warn("Failed to subscribe to distributed cache", "error", err)
+			r.logger.Warn("Failed to subscribe to distributed cache", map[string]interface{}{"error": err.Error()})
 		}
 	}
 	
@@ -209,10 +209,11 @@ func (r *NATSSchedulerRetriever) InitializeRetrievalServices() error {
 	go r.cacheManager()
 	go r.cacheCleanup()
 	
-	r.logger.Info("NATS retrieval services initialized",
-		"node_id", r.nodeID,
-		"distributed_cache", r.config.DistributedCacheEnabled,
-		"cache_ttl", r.config.CacheTTL)
+	r.logger.Info("NATS retrieval services initialized", map[string]interface{}{
+		"node_id": r.nodeID,
+		"distributed_cache": r.config.DistributedCacheEnabled,
+		"cache_ttl": r.config.CacheTTL,
+	})
 	
 	return nil
 }
@@ -222,7 +223,7 @@ func (r *NATSSchedulerRetriever) subscribeToRetrievalRequests() error {
 	_, err := r.conn.Subscribe(r.config.RetrievalRequestSubject, func(msg *nats.Msg) {
 		var request RetrievalRequest
 		if err := json.Unmarshal(msg.Data, &request); err != nil {
-			r.logger.Error("Failed to unmarshal retrieval request", "error", err)
+			r.logger.Error("Failed to unmarshal retrieval request", err, map[string]interface{}{})
 			return
 		}
 		
@@ -231,10 +232,11 @@ func (r *NATSSchedulerRetriever) subscribeToRetrievalRequests() error {
 			return
 		}
 		
-		r.logger.Debug("Processing retrieval request",
-			"id", request.ID,
-			"query", request.Query,
-			"requestor", request.RequestorID)
+		r.logger.Debug("Processing retrieval request", map[string]interface{}{
+			"id":        request.ID,
+			"query":     request.Query,
+			"requestor": request.RequestorID,
+		})
 		
 		// Process request asynchronously
 		go r.processRetrievalRequest(&request, msg.Reply)
@@ -257,7 +259,7 @@ func (r *NATSSchedulerRetriever) subscribeToDistributedCache() error {
 		}
 		
 		if err := json.Unmarshal(msg.Data, &invalidation); err != nil {
-			r.logger.Error("Failed to unmarshal cache invalidation", "error", err)
+			r.logger.Error("Failed to unmarshal cache invalidation", err, map[string]interface{}{})
 			return
 		}
 		
@@ -270,7 +272,7 @@ func (r *NATSSchedulerRetriever) subscribeToDistributedCache() error {
 		delete(r.localCache, invalidation.Query)
 		r.mu.Unlock()
 		
-		r.logger.Debug("Cache invalidated", "query", invalidation.Query, "by_node", invalidation.NodeID)
+		r.logger.Debug("Cache invalidated", map[string]interface{}{"query": invalidation.Query, "by_node": invalidation.NodeID})
 	})
 	
 	if err != nil {
@@ -281,7 +283,7 @@ func (r *NATSSchedulerRetriever) subscribeToDistributedCache() error {
 	_, err = r.conn.Subscribe(r.config.CacheSubject+".replicate", func(msg *nats.Msg) {
 		var cacheEntry DistributedRetrievalCache
 		if err := json.Unmarshal(msg.Data, &cacheEntry); err != nil {
-			r.logger.Error("Failed to unmarshal cache replication", "error", err)
+			r.logger.Error("Failed to unmarshal cache replication", err, map[string]interface{}{})
 			return
 		}
 		
@@ -297,7 +299,7 @@ func (r *NATSSchedulerRetriever) subscribeToDistributedCache() error {
 		}
 		r.mu.Unlock()
 		
-		r.logger.Debug("Cache replicated", "query", cacheEntry.Query, "from_node", cacheEntry.NodeID)
+		r.logger.Debug("Cache replicated", map[string]interface{}{"query": cacheEntry.Query, "from_node": cacheEntry.NodeID})
 	})
 	
 	return err
@@ -328,12 +330,12 @@ func (r *NATSSchedulerRetriever) processRetrievalRequest(request *RetrievalReque
 	// Send response
 	data, err := json.Marshal(response)
 	if err != nil {
-		r.logger.Error("Failed to marshal retrieval response", "error", err)
+		r.logger.Error("Failed to marshal retrieval response", err, map[string]interface{}{})
 		return
 	}
 	
 	if err := r.conn.Publish(replySubject, data); err != nil {
-		r.logger.Error("Failed to publish retrieval response", "error", err)
+		r.logger.Error("Failed to publish retrieval response", err, map[string]interface{}{})
 		return
 	}
 	

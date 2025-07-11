@@ -140,7 +140,9 @@ const (
 
 // User represents a user in the system
 type User struct {
+	ID        string    `json:"user_id"`        // Alias for UserID for compatibility
 	UserID    string    `json:"user_id"`
+	Name      string    `json:"user_name"`      // Alias for UserName for compatibility  
 	UserName  string    `json:"user_name"`
 	Role      UserRole  `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
@@ -161,27 +163,31 @@ type MemCube struct {
 
 // SearchQuery represents a query for memory search
 type SearchQuery struct {
-	Query     string            `json:"query" validate:"required"`
-	TopK      int               `json:"top_k,omitempty"`
-	Filters   map[string]string `json:"filters,omitempty"`
-	CubeIDs   []string          `json:"cube_ids,omitempty"`
-	UserID    string            `json:"user_id,omitempty"`
-	SessionID string            `json:"session_id,omitempty"`
+	Query          string            `json:"query" validate:"required"`
+	TopK           int               `json:"top_k,omitempty"`
+	Filters        map[string]string `json:"filters,omitempty"`
+	CubeIDs        []string          `json:"cube_ids,omitempty"`
+	InstallCubeIDs []string          `json:"install_cube_ids,omitempty"`
+	UserID         string            `json:"user_id,omitempty"`
+	SessionID      string            `json:"session_id,omitempty"`
 }
 
 // AddMemoryRequest represents a request to add memory to a cube
 type AddMemoryRequest struct {
-	Messages      *MessageList `json:"messages,omitempty"`
-	MemoryContent *string      `json:"memory_content,omitempty"`
-	DocPath       *string      `json:"doc_path,omitempty"`
-	CubeID        *string      `json:"cube_id,omitempty"`
-	UserID        *string      `json:"user_id,omitempty"`
+	Messages      []map[string]interface{} `json:"messages,omitempty"`
+	MemoryContent *string                  `json:"memory_content,omitempty"`
+	DocPath       *string                  `json:"doc_path,omitempty"`
+	MemCubeID     string                   `json:"mem_cube_id,omitempty"`
+	UserID        string                   `json:"user_id,omitempty"`
 }
 
 // ChatRequest represents a chat request
 type ChatRequest struct {
-	Query  string  `json:"query" validate:"required"`
-	UserID *string `json:"user_id,omitempty"`
+	Query     string                 `json:"query" validate:"required"`
+	UserID    string                 `json:"user_id,omitempty"`
+	Context   map[string]interface{} `json:"context,omitempty"`
+	MaxTokens *int                   `json:"max_tokens,omitempty"`
+	TopK      *int                   `json:"top_k,omitempty"`
 }
 
 // ChatResponse represents a chat response
@@ -224,6 +230,18 @@ type VectorSearchResult struct {
 	ID       string          `json:"id"`
 	Score    float32         `json:"score"`
 	Metadata map[string]interface{} `json:"metadata"`
+}
+
+// RetrievalResult represents a result from internet retrieval
+type RetrievalResult struct {
+	ID          string                 `json:"id"`
+	URL         string                 `json:"url"`
+	Title       string                 `json:"title"`
+	Content     string                 `json:"content"`
+	Summary     string                 `json:"summary,omitempty"`
+	Score       float32                `json:"score"`
+	Metadata    map[string]interface{} `json:"metadata"`
+	RetrievedAt time.Time              `json:"retrieved_at"`
 }
 
 // TaskPriority represents the priority of a scheduled task
@@ -329,4 +347,73 @@ func NewRequestContext(userID, sessionID string) *RequestContext {
 		RequestID: uuid.New().String(),
 		TraceID:   uuid.New().String(),
 	}
+}
+
+// UserSession represents a user session
+type UserSession struct {
+	SessionID string    `json:"session_id"`
+	UserID    string    `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	IsActive  bool      `json:"is_active"`
+	IPAddress string    `json:"ip_address,omitempty"`
+	UserAgent string    `json:"user_agent,omitempty"`
+}
+
+// JWTClaims represents JWT token claims
+type JWTClaims struct {
+	UserID    string    `json:"user_id"`
+	Role      UserRole  `json:"role"`
+	SessionID string    `json:"session_id"`
+	IssuedAt  time.Time `json:"iat"`
+	ExpiresAt time.Time `json:"exp"`
+}
+
+// AuthRequest represents an authentication request
+type AuthRequest struct {
+	Username string `json:"username" validate:"required"`
+	Password string `json:"password" validate:"required"`
+}
+
+// AuthResponse represents an authentication response
+type AuthResponse struct {
+	Token     string       `json:"token"`
+	User      *User        `json:"user"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	SessionID string       `json:"session_id"`
+	UserID    string       `json:"user_id"`
+}
+
+// GetAllMemoriesRequest represents a request to get all memories
+type GetAllMemoriesRequest struct {
+	UserID    string `json:"user_id"`
+	MemCubeID string `json:"mem_cube_id"`
+}
+
+// GetMemoryRequest represents a request to get a specific memory
+type GetMemoryRequest struct {
+	UserID    string `json:"user_id"`
+	MemCubeID string `json:"mem_cube_id"`
+	MemoryID  string `json:"memory_id"`
+}
+
+// UpdateMemoryRequest represents a request to update a memory
+type UpdateMemoryRequest struct {
+	UserID        string                 `json:"user_id"`
+	MemCubeID     string                 `json:"mem_cube_id"`
+	MemoryID      string                 `json:"memory_id"`
+	UpdatedMemory map[string]interface{} `json:"updated_memory"`
+}
+
+// DeleteMemoryRequest represents a request to delete a memory
+type DeleteMemoryRequest struct {
+	UserID    string `json:"user_id"`
+	MemCubeID string `json:"mem_cube_id"`
+	MemoryID  string `json:"memory_id"`
+}
+
+// DeleteAllMemoriesRequest represents a request to delete all memories
+type DeleteAllMemoriesRequest struct {
+	UserID    string `json:"user_id"`
+	MemCubeID string `json:"mem_cube_id"`
 }

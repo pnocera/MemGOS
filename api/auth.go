@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/memtensor/memgos/pkg/types"
 )
 
 // AuthManager handles authentication and session management
@@ -79,10 +81,10 @@ func (am *AuthManager) SetExpiry(duration time.Duration) {
 }
 
 // CreateSession creates a new session for a user
-func (am *AuthManager) CreateSession(userID string, metadata map[string]interface{}) (*Session, error) {
+func (am *AuthManager) CreateSession(ctx context.Context, userID string) (string, error) {
 	sessionID, err := generateSessionID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate session ID: %w", err)
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
 	}
 
 	now := time.Now()
@@ -93,18 +95,18 @@ func (am *AuthManager) CreateSession(userID string, metadata map[string]interfac
 		LastSeen:  now,
 		ExpiresAt: now.Add(am.expiry),
 		Active:    true,
-		Metadata:  metadata,
+		Metadata:  make(map[string]interface{}),
 	}
 
 	am.mu.Lock()
 	am.sessions[sessionID] = session
 	am.mu.Unlock()
 
-	return session, nil
+	return sessionID, nil
 }
 
 // GetSession retrieves a session by ID
-func (am *AuthManager) GetSession(sessionID string) (*Session, error) {
+func (am *AuthManager) GetSession(ctx context.Context, sessionID string) (*types.UserSession, error) {
 	am.mu.RLock()
 	session, exists := am.sessions[sessionID]
 	am.mu.RUnlock()
@@ -114,7 +116,7 @@ func (am *AuthManager) GetSession(sessionID string) (*Session, error) {
 	}
 
 	if !session.Active || time.Now().After(session.ExpiresAt) {
-		am.InvalidateSession(sessionID)
+		am.InvalidateSession(ctx, sessionID)
 		return nil, fmt.Errorf("session expired or inactive")
 	}
 
@@ -123,16 +125,26 @@ func (am *AuthManager) GetSession(sessionID string) (*Session, error) {
 	session.LastSeen = time.Now()
 	am.mu.Unlock()
 
-	return session, nil
+	// Convert to types.UserSession
+	userSession := &types.UserSession{
+		SessionID: session.ID,
+		UserID:    session.UserID,
+		CreatedAt: session.CreatedAt,
+		ExpiresAt: session.ExpiresAt,
+		IsActive:  session.Active,
+	}
+
+	return userSession, nil
 }
 
 // InvalidateSession invalidates a session
-func (am *AuthManager) InvalidateSession(sessionID string) {
+func (am *AuthManager) InvalidateSession(ctx context.Context, sessionID string) error {
 	am.mu.Lock()
 	if session, exists := am.sessions[sessionID]; exists {
 		session.Active = false
 	}
 	am.mu.Unlock()
+	return nil
 }
 
 // CleanupExpiredSessions removes expired sessions
@@ -148,19 +160,28 @@ func (am *AuthManager) CleanupExpiredSessions() {
 	}
 }
 
-// GenerateJWT generates a JWT token for a session
-func (am *AuthManager) GenerateJWT(session *Session, role string) (string, error) {
+// GenerateJWT generates a JWT token for a user
+func (am *AuthManager) GenerateJWT(ctx context.Context, userID string, expirationMinutes int) (string, error) {
+	now := time.Now()
+	expiresAt := now.Add(time.Duration(expirationMinutes) * time.Minute)
+	
+	// Generate a session ID for the JWT
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
+	}
+
 	claims := &Claims{
-		UserID:    session.UserID,
-		SessionID: session.ID,
-		Role:      role,
+		UserID:    userID,
+		SessionID: sessionID,
+		Role:      "user", // Default role
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(session.ExpiresAt),
-			IssuedAt:  jwt.NewNumericDate(session.CreatedAt),
-			NotBefore: jwt.NewNumericDate(session.CreatedAt),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    "memgos-api",
-			Subject:   session.UserID,
-			ID:        session.ID,
+			Subject:   userID,
+			ID:        sessionID,
 		},
 	}
 
@@ -174,7 +195,7 @@ func (am *AuthManager) GenerateJWT(session *Session, role string) (string, error
 }
 
 // ValidateJWT validates a JWT token and returns the claims
-func (am *AuthManager) ValidateJWT(tokenString string) (*Claims, error) {
+func (am *AuthManager) ValidateJWT(ctx context.Context, tokenString string) (*types.JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -188,11 +209,21 @@ func (am *AuthManager) ValidateJWT(tokenString string) (*Claims, error) {
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		// Verify session is still active
-		_, err := am.GetSession(claims.SessionID)
+		_, err := am.GetSession(ctx, claims.SessionID)
 		if err != nil {
 			return nil, fmt.Errorf("session invalid: %w", err)
 		}
-		return claims, nil
+		
+		// Convert to types.JWTClaims
+		jwtClaims := &types.JWTClaims{
+			UserID:    claims.UserID,
+			Role:      types.UserRole(claims.Role),
+			SessionID: claims.SessionID,
+			IssuedAt:  claims.IssuedAt.Time,
+			ExpiresAt: claims.ExpiresAt.Time,
+		}
+		
+		return jwtClaims, nil
 	}
 
 	return nil, fmt.Errorf("invalid token")
@@ -214,18 +245,14 @@ func (s *Server) login(c *gin.Context) {
 	// For now, accept any user_id
 
 	// Create session
-	session, err := s.authManager.CreateSession(req.UserID, map[string]interface{}{
-		"login_time": time.Now(),
-		"ip_address": c.ClientIP(),
-		"user_agent": c.Request.UserAgent(),
-	})
+	sessionID, err := s.authManager.CreateSession(c.Request.Context(), req.UserID)
 	if err != nil {
 		s.handleError(c, "Failed to create session", err)
 		return
 	}
 
 	// Generate JWT
-	token, err := s.authManager.GenerateJWT(session, "user") // Default role
+	token, err := s.authManager.GenerateJWT(c.Request.Context(), req.UserID, 60) // 60 minutes expiration
 	if err != nil {
 		s.handleError(c, "Failed to generate token", err)
 		return
@@ -233,10 +260,9 @@ func (s *Server) login(c *gin.Context) {
 
 	response := AuthResponse{
 		Token:     token,
-		SessionID: session.ID,
-		UserID:    session.UserID,
-		ExpiresAt: session.ExpiresAt,
-		Metadata:  session.Metadata,
+		SessionID: sessionID,
+		UserID:    req.UserID,
+		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}
 
 	c.JSON(http.StatusOK, BaseResponse[AuthResponse]{
@@ -250,7 +276,7 @@ func (s *Server) login(c *gin.Context) {
 func (s *Server) logout(c *gin.Context) {
 	sessionID := c.GetString("session_id")
 	if sessionID != "" {
-		s.authManager.InvalidateSession(sessionID)
+		s.authManager.InvalidateSession(c.Request.Context(), sessionID)
 	}
 
 	c.JSON(http.StatusOK, SimpleResponse{
@@ -270,7 +296,7 @@ func (s *Server) refreshToken(c *gin.Context) {
 		return
 	}
 
-	claims, err := s.authManager.ValidateJWT(tokenString)
+	claims, err := s.authManager.ValidateJWT(c.Request.Context(), tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
@@ -281,7 +307,7 @@ func (s *Server) refreshToken(c *gin.Context) {
 	}
 
 	// Get current session
-	session, err := s.authManager.GetSession(claims.SessionID)
+	session, err := s.authManager.GetSession(c.Request.Context(), claims.SessionID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
@@ -291,11 +317,8 @@ func (s *Server) refreshToken(c *gin.Context) {
 		return
 	}
 
-	// Extend session
-	session.ExpiresAt = time.Now().Add(s.authManager.expiry)
-
 	// Generate new token
-	newToken, err := s.authManager.GenerateJWT(session, claims.Role)
+	newToken, err := s.authManager.GenerateJWT(c.Request.Context(), session.UserID, 60) // 60 minutes expiration
 	if err != nil {
 		s.handleError(c, "Failed to generate new token", err)
 		return
@@ -303,9 +326,9 @@ func (s *Server) refreshToken(c *gin.Context) {
 
 	response := AuthResponse{
 		Token:     newToken,
-		SessionID: session.ID,
+		SessionID: session.SessionID,
 		UserID:    session.UserID,
-		ExpiresAt: session.ExpiresAt,
+		ExpiresAt: time.Now().Add(60 * time.Minute),
 	}
 
 	c.JSON(http.StatusOK, BaseResponse[AuthResponse]{
@@ -327,11 +350,11 @@ func (s *Server) jwtAuthMiddleware() gin.HandlerFunc {
 		// Try JWT first
 		tokenString := extractTokenFromHeader(c.GetHeader("Authorization"))
 		if tokenString != "" {
-			claims, err := s.authManager.ValidateJWT(tokenString)
+			claims, err := s.authManager.ValidateJWT(c.Request.Context(), tokenString)
 			if err == nil {
 				c.Set("user_id", claims.UserID)
 				c.Set("session_id", claims.SessionID)
-				c.Set("role", claims.Role)
+				c.Set("role", string(claims.Role))
 				c.Next()
 				return
 			}

@@ -13,6 +13,8 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	extast "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -114,8 +116,9 @@ func (mp *MarkdownParser) ParseFile(ctx context.Context, filePath string, config
 	// Add file-specific metadata
 	if doc.Metadata != nil {
 		doc.Metadata.FileExtension = strings.ToLower(filepath.Ext(filePath))
-		doc.Metadata.CreatedAt = &fileInfo.ModTime()
-		doc.Metadata.ModifiedAt = &fileInfo.ModTime()
+		modTime := fileInfo.ModTime()
+		doc.Metadata.CreatedAt = &modTime
+		doc.Metadata.ModifiedAt = &modTime
 		
 		// Extract title from filename if not already set
 		if doc.Metadata.Title == "" {
@@ -317,7 +320,6 @@ func (mp *MarkdownParser) parseFrontMatterFields(frontMatter string, metadata *D
 
 // extractStructure extracts structural elements from Markdown using goldmark
 func (mp *MarkdownParser) extractStructure(content string) *StructuredContent {
-	structure := &StructuredContent{}
 	
 	// Remove front matter for processing
 	cleanContent := mp.removeFrontMatter(content)
@@ -333,7 +335,9 @@ func (mp *MarkdownParser) extractStructure(content string) *StructuredContent {
 
 // extractStructureWithGoldmark uses goldmark to parse Markdown structure
 func (mp *MarkdownParser) extractStructureWithGoldmark(content string) *StructuredContent {
-	md := goldmark.New()
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.Table),
+	)
 	
 	source := []byte(content)
 	reader := text.NewReader(source)
@@ -357,10 +361,7 @@ func (mp *MarkdownParser) extractStructureWithGoldmark(content string) *Structur
 				Level: n.Level,
 				Text:  mp.extractTextFromNode(n, source),
 			}
-			// Extract ID if present
-			if id := n.AttributeValue([]byte("id")); id != nil {
-				heading.ID = string(id.([]byte))
-			}
+			// Note: ID extraction would require additional attribute handling
 			structure.Headings = append(structure.Headings, heading)
 			
 		case *ast.Paragraph:
@@ -391,7 +392,7 @@ func (mp *MarkdownParser) extractStructureWithGoldmark(content string) *Structur
 				structure.Lists = append(structure.Lists, list)
 			}
 			
-		case *ast.Table:
+		case *extast.Table:
 			table := mp.extractTableFromNode(n, source)
 			if table.Rows != nil || table.Headers != nil {
 				structure.Tables = append(structure.Tables, table)
@@ -453,7 +454,7 @@ func (mp *MarkdownParser) extractTextFromNode(node ast.Node, source []byte) stri
 }
 
 // extractTableFromNode extracts table data from an AST table node
-func (mp *MarkdownParser) extractTableFromNode(tableNode *ast.Table, source []byte) Table {
+func (mp *MarkdownParser) extractTableFromNode(tableNode *extast.Table, source []byte) Table {
 	table := Table{}
 	
 	var currentRow []string
@@ -461,11 +462,11 @@ func (mp *MarkdownParser) extractTableFromNode(tableNode *ast.Table, source []by
 	
 	for child := tableNode.FirstChild(); child != nil; child = child.NextSibling() {
 		switch n := child.(type) {
-		case *ast.TableRow:
+		case *extast.TableRow:
 			currentRow = []string{}
 			
 			for cell := n.FirstChild(); cell != nil; cell = cell.NextSibling() {
-				if cellNode, ok := cell.(*ast.TableCell); ok {
+				if cellNode, ok := cell.(*extast.TableCell); ok {
 					cellText := mp.extractTextFromNode(cellNode, source)
 					currentRow = append(currentRow, cellText)
 				}
@@ -495,7 +496,7 @@ func (mp *MarkdownParser) extractStructureFallback(content string) *StructuredCo
 	var currentList *List
 	
 	for i, line := range lines {
-		originalLine := line
+		_ = line // originalLine reference removed
 		line = strings.TrimSpace(line)
 		
 		if line == "" {

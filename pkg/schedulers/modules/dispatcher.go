@@ -44,9 +44,12 @@ func NewSchedulerDispatcher(maxWorkers int, enableParallelDispatch bool) *Schedu
 		dispatcher.workerPool <- struct{}{}
 	}
 
-	dispatcher.logger.Info("SchedulerDispatcher created", 
-		"max_workers", maxWorkers, 
-		"parallel_dispatch", enableParallelDispatch)
+	if dispatcher.logger != nil {
+		dispatcher.logger.Info("SchedulerDispatcher created", map[string]interface{}{
+			"max_workers": maxWorkers,
+			"parallel_dispatch": enableParallelDispatch,
+		})
+	}
 
 	return dispatcher
 }
@@ -57,7 +60,9 @@ func (d *SchedulerDispatcher) RegisterHandler(label string, handler HandlerFunc)
 	defer d.mu.Unlock()
 	
 	d.handlers[label] = handler
-	d.logger.Debug("Handler registered", "label", label)
+	d.logger.Debug("Handler registered", map[string]interface{}{
+		"label": label,
+	})
 }
 
 // RegisterHandlers bulk registers multiple handlers from a map
@@ -68,7 +73,9 @@ func (d *SchedulerDispatcher) RegisterHandlers(handlers map[string]HandlerFunc) 
 	registeredCount := 0
 	for label, handler := range handlers {
 		if handler == nil {
-			d.logger.Error("Handler is nil", "label", label)
+			d.logger.Error("Handler is nil", nil, map[string]interface{}{
+				"label": label,
+			})
 			continue
 		}
 		
@@ -76,17 +83,22 @@ func (d *SchedulerDispatcher) RegisterHandlers(handlers map[string]HandlerFunc) 
 		registeredCount++
 	}
 	
-	d.logger.Info("Handlers registered in bulk", "count", registeredCount)
+	d.logger.Info("Handlers registered in bulk", map[string]interface{}{
+		"count": registeredCount,
+	})
 	return nil
 }
 
 // defaultMessageHandler provides a default handler for unregistered message types
 func (d *SchedulerDispatcher) defaultMessageHandler(messages []*ScheduleMessageItem) error {
-	d.logger.Debug("Using default message handler", "message_count", len(messages))
+	d.logger.Debug("Using default message handler", map[string]interface{}{
+		"message_count": len(messages),
+	})
 	for _, msg := range messages {
-		d.logger.Debug("Processing with default handler", 
-			"label", msg.Label, 
-			"content_length", len(msg.Content))
+		d.logger.Debug("Processing with default handler", map[string]interface{}{
+			"label": msg.Label,
+			"content_length": len(msg.Content),
+		})
 	}
 	return nil
 }
@@ -125,13 +137,16 @@ func (d *SchedulerDispatcher) dispatchGroup(label string, msgs []*ScheduleMessag
 	d.mu.RUnlock()
 
 	if !exists {
-		d.logger.Warn("No handler registered for label, using default", "label", label)
+		d.logger.Warn("No handler registered for label, using default", map[string]interface{}{
+		"label": label,
+	})
 		handler = d.defaultMessageHandler
 	}
 
-	d.logger.Debug("Dispatching message group", 
-		"label", label, 
-		"message_count", len(msgs))
+	d.logger.Debug("Dispatching message group", map[string]interface{}{
+		"label": label,
+		"message_count": len(msgs),
+	})
 
 	if d.enableParallelDispatch {
 		return d.dispatchParallel(handler, msgs)
@@ -150,7 +165,7 @@ func (d *SchedulerDispatcher) dispatchParallel(handler HandlerFunc, msgs []*Sche
 			}()
 			
 			if err := handler(msgs); err != nil {
-				d.logger.Error("Parallel handler execution failed", "error", err)
+				d.logger.Error("Parallel handler execution failed", err, map[string]interface{}{})
 			}
 		}()
 		return nil
@@ -176,7 +191,7 @@ func (d *SchedulerDispatcher) Start() error {
 	}
 	
 	d.running = true
-	d.logger.Info("Scheduler dispatcher started")
+	d.logger.Info("Scheduler dispatcher started", map[string]interface{}{})
 	return nil
 }
 
@@ -205,12 +220,12 @@ drainLoop:
 				break drainLoop
 			}
 		case <-timeout:
-			d.logger.Warn("Timeout waiting for workers to complete")
+			d.logger.Warn("Timeout waiting for workers to complete", map[string]interface{}{})
 			break drainLoop
 		}
 	}
 	
-	d.logger.Info("Scheduler dispatcher stopped")
+	d.logger.Info("Scheduler dispatcher stopped", map[string]interface{}{})
 	return nil
 }
 

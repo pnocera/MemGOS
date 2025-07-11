@@ -50,7 +50,7 @@ func NewChatManager(config *ChatManagerConfig) (*SimpleChatManager, error) {
 	
 	manager := &SimpleChatManager{
 		config:        config,
-		logger:        logger.NewLogger("ChatManager"),
+		logger:        logger.NewLogger(),
 		sessions:      make(map[string]BaseMemChat),
 		factory:       NewMemChatFactory(),
 		globalMetrics: make(map[string]*ChatMetrics),

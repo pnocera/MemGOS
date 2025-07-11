@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -311,21 +310,25 @@ func (s *Server) getAllMemories(c *gin.Context) {
 		userID = s.getUserID(c)
 	}
 
-	req := &types.GetAllMemoriesRequest{
-		UserID:    userID,
-		MemCubeID: memCubeID,
-	}
+	// Parameters are extracted directly from query and path
 
-	result, err := s.mosCore.GetAll(c.Request.Context(), req)
+	result, err := s.mosCore.GetAll(c.Request.Context(), memCubeID, userID)
 	if err != nil {
 		s.handleError(c, "Failed to get memories", err)
 		return
 	}
 
+	// Convert result to map for response
+	responseData := map[string]interface{}{
+		"text_memories":       result.TextMem,
+		"activation_memories": result.ActMem,
+		"parametric_memories": result.ParaMem,
+	}
+
 	resp := MemoryResponse{
 		Code:    http.StatusOK,
 		Message: "Memories retrieved successfully",
-		Data:    &result,
+		Data:    &responseData,
 	}
 
 	c.JSON(http.StatusOK, resp)
@@ -340,22 +343,27 @@ func (s *Server) getMemory(c *gin.Context) {
 		userID = s.getUserID(c)
 	}
 
-	req := &types.GetMemoryRequest{
-		UserID:    userID,
-		MemCubeID: memCubeID,
-		MemoryID:  memoryID,
-	}
+	// Parameters are extracted directly from query and path
 
-	result, err := s.mosCore.Get(c.Request.Context(), req)
+	result, err := s.mosCore.Get(c.Request.Context(), memCubeID, memoryID, userID)
 	if err != nil {
 		s.handleError(c, "Failed to get memory", err)
 		return
 	}
 
+	// Convert result to map for response
+	responseData := map[string]interface{}{
+		"id":         result.GetID(),
+		"content":    result.GetContent(),
+		"metadata":   result.GetMetadata(),
+		"created_at": result.GetCreatedAt(),
+		"updated_at": result.GetUpdatedAt(),
+	}
+
 	resp := MemoryResponse{
 		Code:    http.StatusOK,
 		Message: "Memory retrieved successfully",
-		Data:    &result,
+		Data:    &responseData,
 	}
 
 	c.JSON(http.StatusOK, resp)
@@ -380,14 +388,17 @@ func (s *Server) updateMemory(c *gin.Context) {
 		return
 	}
 
-	req := &types.UpdateMemoryRequest{
-		UserID:       userID,
-		MemCubeID:    memCubeID,
-		MemoryID:     memoryID,
-		UpdatedMemory: updatedMemory,
-	}
+	// Parameters are extracted directly from query and path
 
-	err := s.mosCore.Update(c.Request.Context(), req)
+	// Convert map to MemoryItem - create a textual memory item as placeholder
+	// TODO: Implement proper conversion from map to specific memory item type based on memory type
+	textualMemory := &types.TextualMemoryItem{
+		ID:        memoryID,
+		Memory:    fmt.Sprintf("%v", updatedMemory["content"]), // Extract content field
+		Metadata:  updatedMemory,
+		UpdatedAt: time.Now(),
+	}
+	err := s.mosCore.Update(c.Request.Context(), memCubeID, memoryID, userID, textualMemory)
 	if err != nil {
 		s.handleError(c, "Failed to update memory", err)
 		return
@@ -410,13 +421,9 @@ func (s *Server) deleteMemory(c *gin.Context) {
 		userID = s.getUserID(c)
 	}
 
-	req := &types.DeleteMemoryRequest{
-		UserID:    userID,
-		MemCubeID: memCubeID,
-		MemoryID:  memoryID,
-	}
+	// Parameters are extracted directly from query and path
 
-	err := s.mosCore.Delete(c.Request.Context(), req)
+	err := s.mosCore.Delete(c.Request.Context(), memCubeID, memoryID, userID)
 	if err != nil {
 		s.handleError(c, "Failed to delete memory", err)
 		return
@@ -438,12 +445,9 @@ func (s *Server) deleteAllMemories(c *gin.Context) {
 		userID = s.getUserID(c)
 	}
 
-	req := &types.DeleteAllMemoriesRequest{
-		UserID:    userID,
-		MemCubeID: memCubeID,
-	}
+	// Parameters are extracted directly from query and path
 
-	err := s.mosCore.DeleteAll(c.Request.Context(), req)
+	err := s.mosCore.DeleteAll(c.Request.Context(), memCubeID, userID)
 	if err != nil {
 		s.handleError(c, "Failed to delete all memories", err)
 		return
@@ -533,15 +537,20 @@ func (s *Server) chat(c *gin.Context) {
 	}
 
 	if req.Context != nil {
-		chatReq.Context = req.Context
+		// Convert map[string]string to map[string]interface{}
+		context := make(map[string]interface{})
+		for k, v := range req.Context {
+			context[k] = v
+		}
+		chatReq.Context = context
 	}
 
 	if req.MaxTokens != nil {
-		chatReq.MaxTokens = *req.MaxTokens
+		chatReq.MaxTokens = req.MaxTokens
 	}
 
 	if req.TopK != nil {
-		chatReq.TopK = *req.TopK
+		chatReq.TopK = req.TopK
 	}
 
 	response, err := s.mosCore.Chat(c.Request.Context(), chatReq)
@@ -649,8 +658,7 @@ func (s *Server) getUserID(c *gin.Context) string {
 func (s *Server) handleError(c *gin.Context, message string, err error) {
 	requestID := c.GetString("request_id")
 	
-	s.logger.Error(message, map[string]interface{}{
-		"error":      err.Error(),
+	s.logger.Error(message, err, map[string]interface{}{
 		"request_id": requestID,
 		"path":       c.Request.URL.Path,
 		"method":     c.Request.Method,

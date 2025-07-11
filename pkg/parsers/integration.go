@@ -11,8 +11,6 @@ import (
 
 	"github.com/memtensor/memgos/pkg/chunkers"
 	"github.com/memtensor/memgos/pkg/interfaces"
-	"github.com/memtensor/memgos/pkg/logger"
-	"github.com/memtensor/memgos/pkg/types"
 )
 
 // TextProcessingService provides a high-level interface for text processing
@@ -21,7 +19,7 @@ type TextProcessingService struct {
 	parserFactory  *ParserFactory
 	chunkerFactory *chunkers.ChunkerFactory
 	embedder       interfaces.Embedder
-	logger         logger.Logger
+	logger         interfaces.Logger
 	
 	// Processing statistics
 	stats      *ServiceStats
@@ -51,7 +49,7 @@ type ServiceStats struct {
 }
 
 // NewTextProcessingService creates a new text processing service
-func NewTextProcessingService(config *TextProcessingConfig, embedder interfaces.Embedder, logger logger.Logger) (*TextProcessingService, error) {
+func NewTextProcessingService(config *TextProcessingConfig, embedder interfaces.Embedder, logger interfaces.Logger) (*TextProcessingService, error) {
 	if config == nil {
 		config = DefaultTextProcessingConfig()
 	}

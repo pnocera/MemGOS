@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/memtensor/memgos/pkg/interfaces"
 	"github.com/memtensor/memgos/pkg/logger"
 )
 
 // ChatConfigManager handles configuration for MemChat instances
 type ChatConfigManager struct {
-	logger       logger.Logger
+	logger       interfaces.Logger
 	configDir    string
 	profiles     map[string]*MemChatConfig
 	globalConfig *GlobalChatConfig
@@ -78,7 +79,7 @@ func NewChatConfigManager(configDir string) (*ChatConfigManager, error) {
 	}
 	
 	manager := &ChatConfigManager{
-		logger:       logger.NewLogger("ChatConfigManager"),
+		logger:       logger.NewLogger(),
 		configDir:    configDir,
 		profiles:     make(map[string]*MemChatConfig),
 		globalConfig: DefaultGlobalChatConfig(),
@@ -477,7 +478,7 @@ func (cm *ChatConfigManager) applyGlobalDefaults(config *MemChatConfig) {
 		config.ChatLLM.Provider = cm.globalConfig.DefaultLLMProvider
 	}
 	if config.ChatLLM.Model == "" && cm.globalConfig.DefaultLLMModel != "" {
-		config.ChatLLM.Model = cm.globalConfig.DefaultLLLModel
+		config.ChatLLM.Model = cm.globalConfig.DefaultLLMModel
 	}
 	if config.ChatLLM.MaxTokens == 0 && cm.globalConfig.DefaultMaxTokens > 0 {
 		config.ChatLLM.MaxTokens = cm.globalConfig.DefaultMaxTokens

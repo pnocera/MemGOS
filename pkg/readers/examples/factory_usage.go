@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/memtensor/memgos/pkg/readers"
-	"github.com/memtensor/memgos/pkg/types"
 )
 
-func main() {
+func factoryMain() {
 	fmt.Println("MemGOS Memory Reader - Factory Usage Examples")
 	fmt.Println("==============================================")
 

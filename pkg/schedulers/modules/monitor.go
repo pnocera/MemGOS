@@ -1,12 +1,14 @@
 package modules
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/memtensor/memgos/pkg/interfaces"
+	"github.com/memtensor/memgos/pkg/types"
 )
 
 // SchedulerMonitor monitors scheduler performance and manages activation memory
@@ -53,7 +55,7 @@ func NewSchedulerMonitor(chatLLM interfaces.LLM, activationMemSize int) *Schedul
 	
 	// Initialize default templates
 	if err := monitor.InitializeDefaultTemplates(); err != nil {
-		monitor.logger.Error("Failed to initialize templates", "error", err)
+		monitor.logger.Error("Failed to initialize templates", err, map[string]interface{}{})
 	}
 	
 	return monitor
@@ -74,7 +76,7 @@ func (m *SchedulerMonitor) UpdateStats(memCube interface{}) {
 		m.statistics["mem_cube"] = memCubeInfo
 	}
 	
-	m.logger.Debug("Statistics updated", "stats", m.statistics)
+	m.logger.Debug("Statistics updated", map[string]interface{}{"stats": m.statistics})
 }
 
 // getMemCubeInfo extracts information from memory cube
@@ -107,14 +109,17 @@ func (m *SchedulerMonitor) DetectIntent(qList []string, textWorkingMemory []stri
 		return nil, fmt.Errorf("failed to build intent recognition prompt: %w", err)
 	}
 	
-	m.logger.Debug("Detecting intent", "query_count", len(qList), "memory_count", len(textWorkingMemory))
+	m.logger.Debug("Detecting intent", map[string]interface{}{
+		"query_count":  len(qList),
+		"memory_count": len(textWorkingMemory),
+	})
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := types.MessageList{
+		{Role: "user", Content: prompt},
 	}
 	
-	response, err := m.chatLLM.Generate(messages)
+	response, err := m.chatLLM.Generate(context.Background(), messages)
 	if err != nil {
 		return nil, fmt.Errorf("LLM generation failed: %w", err)
 	}
@@ -143,10 +148,11 @@ func (m *SchedulerMonitor) DetectIntent(qList []string, textWorkingMemory []stri
 	}
 	m.mu.Unlock()
 	
-	m.logger.Debug("Intent detected", 
-		"trigger_retrieval", result.TriggerRetrieval,
-		"missing_evidence_count", len(result.MissingEvidence),
-		"confidence", result.Confidence)
+	m.logger.Debug("Intent detected", map[string]interface{}{
+		"trigger_retrieval":       result.TriggerRetrieval,
+		"missing_evidence_count": len(result.MissingEvidence),
+		"confidence":             result.Confidence,
+	})
 	
 	return result, nil
 }
@@ -173,20 +179,20 @@ func (m *SchedulerMonitor) UpdateFreq(answer string) ([]*ActivationMemoryItem, e
 	}
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := types.MessageList{
+		{Role: "user", Content: prompt},
 	}
 	
-	response, err := m.chatLLM.Generate(messages)
+	response, err := m.chatLLM.Generate(context.Background(), messages)
 	if err != nil {
-		m.logger.Error("LLM generation failed for frequency update", "error", err)
+		m.logger.Error("LLM generation failed for frequency update", err, map[string]interface{}{})
 		return freqList, err
 	}
 	
 	// Parse JSON response
 	result, err := m.extractJSONDict(response)
 	if err != nil {
-		m.logger.Error("Failed to parse frequency response", "error", err)
+		m.logger.Error("Failed to parse frequency response", err, map[string]interface{}{})
 		return freqList, err
 	}
 	
@@ -198,7 +204,7 @@ func (m *SchedulerMonitor) UpdateFreq(answer string) ([]*ActivationMemoryItem, e
 			m.mu.Unlock()
 			return updatedItems, nil
 		} else {
-			m.logger.Error("Failed to parse updated activation memory items", "error", err)
+			m.logger.Error("Failed to parse updated activation memory items", err, map[string]interface{}{})
 		}
 	}
 	
@@ -213,7 +219,7 @@ func (m *SchedulerMonitor) parseActivationMemoryItems(data interface{}) ([]*Acti
 		for _, item := range items {
 			if itemMap, ok := item.(map[string]interface{}); ok {
 				memItem := &ActivationMemoryItem{
-					Memory: getStringValue(itemMap, "memory"),
+					Memory: getMonitorStringValue(itemMap, "memory"),
 					Count:  int(getFloat64Value(itemMap, "count")),
 				}
 				result = append(result, memItem)
@@ -344,7 +350,7 @@ func getStringSliceValue(data map[string]interface{}, key string) []string {
 	return []string{}
 }
 
-func getStringValue(data map[string]interface{}, key string) string {
+func getMonitorStringValue(data map[string]interface{}, key string) string {
 	if val, ok := data[key]; ok {
 		if str, ok := val.(string); ok {
 			return str

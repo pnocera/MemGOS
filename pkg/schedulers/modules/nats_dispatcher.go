@@ -63,7 +63,7 @@ type NATSSchedulerDispatcher struct {
 	failedMessages          int64
 	activeWorkers           int64
 	
-	logger                  *logger.Logger
+	logger                  interfaces.Logger
 	startTime               time.Time
 }
 
@@ -88,7 +88,7 @@ func NewNATSSchedulerDispatcher(conn *nats.Conn, js jetstream.JetStream, config 
 		processedMessages:      0,
 		failedMessages:         0,
 		activeWorkers:          0,
-		logger:                 logger.GetLogger("nats-dispatcher"),
+		logger:                 logger.NewLogger(),
 		startTime:              time.Now(),
 	}
 
@@ -141,10 +141,11 @@ func (d *NATSSchedulerDispatcher) InitializeWorkQueue() error {
 		return fmt.Errorf("failed to create work queue consumer: %w", err)
 	}
 	
-	d.logger.Info("NATS work queue initialized",
-		"stream", streamConfig.Name,
-		"subject", d.config.WorkQueueSubject,
-		"max_workers", d.config.MaxWorkers)
+	d.logger.Info("NATS work queue initialized", map[string]interface{}{
+		"stream": streamConfig.Name,
+		"subject": d.config.WorkQueueSubject,
+		"max_workers": d.config.MaxWorkers,
+	})
 	
 	return nil
 }
@@ -155,7 +156,9 @@ func (d *NATSSchedulerDispatcher) RegisterHandler(label string, handler HandlerF
 	defer d.mu.Unlock()
 	
 	d.handlers[label] = handler
-	d.logger.Debug("Handler registered", "label", label)
+	d.logger.Debug("Handler registered", map[string]interface{}{
+		"label": label,
+	})
 }
 
 // RegisterHandlers bulk registers multiple handlers from a map
@@ -166,7 +169,9 @@ func (d *NATSSchedulerDispatcher) RegisterHandlers(handlers map[string]HandlerFu
 	registeredCount := 0
 	for label, handler := range handlers {
 		if handler == nil {
-			d.logger.Error("Handler is nil", "label", label)
+			d.logger.Error("Handler is nil", nil, map[string]interface{}{
+				"label": label,
+			})
 			continue
 		}
 		
@@ -174,7 +179,9 @@ func (d *NATSSchedulerDispatcher) RegisterHandlers(handlers map[string]HandlerFu
 		registeredCount++
 	}
 	
-	d.logger.Info("Handlers registered in bulk", "count", registeredCount)
+	d.logger.Info("Handlers registered in bulk", map[string]interface{}{
+		"count": registeredCount,
+	})
 	return nil
 }
 
@@ -230,10 +237,11 @@ func (d *NATSSchedulerDispatcher) publishWorkItem(workItem *WorkItem) error {
 		return fmt.Errorf("failed to publish work item: %w", err)
 	}
 	
-	d.logger.Debug("Work item published",
-		"id", workItem.ID,
-		"label", workItem.Label,
-		"message_count", len(workItem.Messages))
+	d.logger.Debug("Work item published", map[string]interface{}{
+		"id": workItem.ID,
+		"label": workItem.Label,
+		"message_count": len(workItem.Messages),
+	})
 	
 	return nil
 }
@@ -272,13 +280,16 @@ func (d *NATSSchedulerDispatcher) dispatchGroup(label string, msgs []*ScheduleMe
 	d.mu.RUnlock()
 
 	if !exists {
-		d.logger.Warn("No handler registered for label, using default", "label", label)
+		d.logger.Warn("No handler registered for label, using default", map[string]interface{}{
+			"label": label,
+		})
 		handler = d.defaultMessageHandler
 	}
 
-	d.logger.Debug("Dispatching message group", 
-		"label", label, 
-		"message_count", len(msgs))
+	d.logger.Debug("Dispatching message group", map[string]interface{}{
+		"label": label,
+		"message_count": len(msgs),
+	})
 
 	if d.config.EnableParallelDispatch {
 		return d.dispatchParallel(handler, msgs)
@@ -304,7 +315,7 @@ func (d *NATSSchedulerDispatcher) dispatchParallel(handler HandlerFunc, msgs []*
 			}()
 			
 			if err := handler(msgs); err != nil {
-				d.logger.Error("Parallel handler execution failed", "error", err)
+				d.logger.Error("Parallel handler execution failed", err, map[string]interface{}{})
 				d.mu.Lock()
 				d.failedMessages += int64(len(msgs))
 				d.mu.Unlock()
@@ -339,11 +350,14 @@ func (d *NATSSchedulerDispatcher) dispatchSerial(handler HandlerFunc, msgs []*Sc
 
 // defaultMessageHandler provides a default handler for unregistered message types
 func (d *NATSSchedulerDispatcher) defaultMessageHandler(messages []*ScheduleMessageItem) error {
-	d.logger.Debug("Using default message handler", "message_count", len(messages))
+	d.logger.Debug("Using default message handler", map[string]interface{}{
+		"message_count": len(messages),
+	})
 	for _, msg := range messages {
-		d.logger.Debug("Processing with default handler", 
-			"label", msg.Label, 
-			"content_length", len(msg.Content))
+		d.logger.Debug("Processing with default handler", map[string]interface{}{
+			"label": msg.Label,
+			"content_length": len(msg.Content),
+		})
 	}
 	return nil
 }
@@ -371,11 +385,13 @@ func (d *NATSSchedulerDispatcher) StartWorkers() error {
 		}()
 		
 		if err := d.consumeWorkItems(); err != nil {
-			d.logger.Error("Work item consumer error", "error", err)
+			d.logger.Error("Work item consumer error", err, map[string]interface{}{})
 		}
 	}()
 	
-	d.logger.Info("NATS dispatcher workers started", "max_workers", d.config.MaxWorkers)
+	d.logger.Info("NATS dispatcher workers started", map[string]interface{}{
+		"max_workers": d.config.MaxWorkers,
+	})
 	return nil
 }
 
@@ -383,7 +399,7 @@ func (d *NATSSchedulerDispatcher) StartWorkers() error {
 func (d *NATSSchedulerDispatcher) consumeWorkItems() error {
 	consumeCtx, err := d.consumer.Consume(func(msg jetstream.Msg) {
 		if err := d.processWorkItem(msg); err != nil {
-			d.logger.Error("Failed to process work item", "error", err)
+			d.logger.Error("Failed to process work item", err, map[string]interface{}{})
 			// Negative acknowledgment - item will be redelivered
 			msg.Nak()
 		} else {
@@ -412,11 +428,12 @@ func (d *NATSSchedulerDispatcher) processWorkItem(msg jetstream.Msg) error {
 		return fmt.Errorf("failed to unmarshal work item: %w", err)
 	}
 	
-	d.logger.Debug("Processing work item",
-		"id", workItem.ID,
-		"label", workItem.Label,
-		"message_count", len(workItem.Messages),
-		"retries", workItem.Retries)
+	d.logger.Debug("Processing work item", map[string]interface{}{
+		"id": workItem.ID,
+		"label": workItem.Label,
+		"message_count": len(workItem.Messages),
+		"retries": workItem.Retries,
+	})
 	
 	// Get handler for work item label
 	d.mu.RLock()
@@ -424,7 +441,9 @@ func (d *NATSSchedulerDispatcher) processWorkItem(msg jetstream.Msg) error {
 	d.mu.RUnlock()
 	
 	if !exists {
-		d.logger.Warn("No handler registered for work item label", "label", workItem.Label)
+		d.logger.Warn("No handler registered for work item label", map[string]interface{}{
+			"label": workItem.Label,
+		})
 		return nil // Skip work item
 	}
 	
@@ -480,12 +499,12 @@ func (d *NATSSchedulerDispatcher) publishSuccessResult(workItem *WorkItem) {
 	
 	data, err := json.Marshal(result)
 	if err != nil {
-		d.logger.Error("Failed to marshal success result", "error", err)
+		d.logger.Error("Failed to marshal success result", err, map[string]interface{}{})
 		return
 	}
 	
 	if _, err := d.js.Publish(d.ctx, d.config.ResultSubject, data); err != nil {
-		d.logger.Error("Failed to publish success result", "error", err)
+		d.logger.Error("Failed to publish success result", err, map[string]interface{}{})
 	}
 }
 
@@ -503,12 +522,12 @@ func (d *NATSSchedulerDispatcher) publishErrorResult(workItem *WorkItem, process
 	
 	data, err := json.Marshal(result)
 	if err != nil {
-		d.logger.Error("Failed to marshal error result", "error", err)
+		d.logger.Error("Failed to marshal error result", err, map[string]interface{}{})
 		return
 	}
 	
 	if _, err := d.js.Publish(d.ctx, d.config.ErrorSubject, data); err != nil {
-		d.logger.Error("Failed to publish error result", "error", err)
+		d.logger.Error("Failed to publish error result", err, map[string]interface{}{})
 	}
 }
 
@@ -522,7 +541,7 @@ func (d *NATSSchedulerDispatcher) Start() error {
 	}
 	
 	d.running = true
-	d.logger.Info("NATS scheduler dispatcher started")
+	d.logger.Info("NATS scheduler dispatcher started", map[string]interface{}{})
 	return nil
 }
 
@@ -546,11 +565,11 @@ func (d *NATSSchedulerDispatcher) Stop() error {
 	for {
 		select {
 		case <-timeout:
-			d.logger.Warn("Timeout waiting for workers to complete")
+			d.logger.Warn("Timeout waiting for workers to complete", map[string]interface{}{})
 			return fmt.Errorf("timeout waiting for workers to complete")
 		case <-ticker.C:
 			if d.activeWorkers == 0 {
-				d.logger.Info("NATS scheduler dispatcher stopped")
+				d.logger.Info("NATS scheduler dispatcher stopped", map[string]interface{}{})
 				return nil
 			}
 		}

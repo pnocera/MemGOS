@@ -13,23 +13,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/memtensor/memgos/pkg/config"
 	"github.com/memtensor/memgos/pkg/interfaces"
-	"github.com/memtensor/memgos/pkg/logger"
-	"github.com/memtensor/memgos/pkg/types"
 )
 
 // Server represents the API server instance
 type Server struct {
-	mosCore interfaces.MOSCore
-	config  *config.MOSConfig
-	logger  interfaces.Logger
-	router  *gin.Engine
-	server  *http.Server
+	mosCore     interfaces.MOSCore
+	config      *config.MOSConfig
+	logger      interfaces.Logger
+	router      *gin.Engine
+	server      *http.Server
+	authManager interfaces.UserManager
 }
 
 // NewServer creates a new API server instance
-func NewServer(mosCore interfaces.MOSCore, cfg *config.MOSConfig, logger interfaces.Logger) *Server {
+func NewServer(mosCore interfaces.MOSCore, cfg *config.MOSConfig, logger interfaces.Logger, authManager interfaces.UserManager) *Server {
 	// Set Gin mode based on config
-	if cfg.Environment == "production" {
+	// Set Gin mode based on log level (use LogLevel as proxy for environment)
+	if cfg.LogLevel == "error" || cfg.LogLevel == "warn" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
@@ -38,10 +38,11 @@ func NewServer(mosCore interfaces.MOSCore, cfg *config.MOSConfig, logger interfa
 	router := gin.New()
 
 	s := &Server{
-		mosCore: mosCore,
-		config:  cfg,
-		logger:  logger,
-		router:  router,
+		mosCore:     mosCore,
+		config:      cfg,
+		logger:      logger,
+		router:      router,
+		authManager: authManager,
 	}
 
 	s.setupMiddleware()
@@ -74,7 +75,8 @@ func (s *Server) setupMiddleware() {
 
 // Start starts the API server
 func (s *Server) Start(ctx context.Context) error {
-	port := s.config.APIPort
+	// Use HealthCheckPort as API port since APIPort doesn't exist
+	port := s.config.HealthCheckPort
 	if port == 0 {
 		port = 8080 // Default port
 	}
@@ -179,5 +181,5 @@ func (s *Server) getPort() int {
 			return port
 		}
 	}
-	return s.config.APIPort
+	return s.config.HealthCheckPort
 }

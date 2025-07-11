@@ -255,6 +255,23 @@ type UserManager interface {
 	
 	// ShareCube shares a cube with another user
 	ShareCube(ctx context.Context, cubeID, fromUserID, toUserID string) error
+	
+	// Authentication and session management methods
+	
+	// CreateSession creates a new user session
+	CreateSession(ctx context.Context, userID string) (string, error)
+	
+	// InvalidateSession invalidates a user session
+	InvalidateSession(ctx context.Context, sessionID string) error
+	
+	// GetSession retrieves session information
+	GetSession(ctx context.Context, sessionID string) (*types.UserSession, error)
+	
+	// ValidateJWT validates a JWT token and returns claims
+	ValidateJWT(ctx context.Context, token string) (*types.JWTClaims, error)
+	
+	// GenerateJWT generates a JWT token for a user
+	GenerateJWT(ctx context.Context, userID string, expirationMinutes int) (string, error)
 }
 
 // ChatManager defines the interface for chat management implementations
@@ -313,6 +330,12 @@ type MOSCore interface {
 	// GetUserInfo retrieves user information
 	GetUserInfo(ctx context.Context, userID string) (map[string]interface{}, error)
 	
+	// ListUsers lists all users
+	ListUsers(ctx context.Context) ([]*types.User, error)
+	
+	// ShareCubeWithUser shares a cube with another user
+	ShareCubeWithUser(ctx context.Context, cubeID, targetUserID string) (bool, error)
+	
 	// Close closes the MOS core
 	Close() error
 }
@@ -369,6 +392,21 @@ type Metrics interface {
 	
 	// Timer records timing metrics
 	Timer(name string, duration float64, labels map[string]string)
+}
+
+// InternetRetriever defines the interface for internet retrieval implementations
+type InternetRetriever interface {
+	// Search searches the internet for relevant content
+	Search(ctx context.Context, query string, topK int) ([]types.RetrievalResult, error)
+	
+	// Retrieve retrieves content from a URL
+	Retrieve(ctx context.Context, url string) (*types.RetrievalResult, error)
+	
+	// GetConfig returns the retriever configuration
+	GetConfig() map[string]interface{}
+	
+	// Close closes the retriever
+	Close() error
 }
 
 // HealthChecker defines the interface for health checking

@@ -11,6 +11,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/memtensor/memgos/pkg/interfaces"
 	"github.com/memtensor/memgos/pkg/logger"
+	"github.com/memtensor/memgos/pkg/types"
 )
 
 // NATSMonitorConfig holds configuration for NATS-based monitoring
@@ -83,7 +84,7 @@ type NATSSchedulerMonitor struct {
 	lastMetricsPublish       time.Time
 	lastHealthCheck          time.Time
 	
-	logger                   *logger.Logger
+	logger                   interfaces.Logger
 	startTime                time.Time
 	nodeID                   string
 }
@@ -163,7 +164,7 @@ func NewNATSSchedulerMonitor(conn *nats.Conn, js jetstream.JetStream, chatLLM in
 		totalProcessingTime:      0,
 		lastMetricsPublish:       time.Time{},
 		lastHealthCheck:          time.Time{},
-		logger:                   logger.GetLogger("nats-monitor"),
+		logger:                   logger.NewLogger(),
 		startTime:                time.Now(),
 		nodeID:                   nodeID,
 	}
@@ -178,7 +179,7 @@ func NewNATSSchedulerMonitor(conn *nats.Conn, js jetstream.JetStream, chatLLM in
 	
 	// Initialize default templates
 	if err := monitor.InitializeDefaultTemplates(); err != nil {
-		monitor.logger.Error("Failed to initialize templates", "error", err)
+		monitor.logger.Error("Failed to initialize templates", err, map[string]interface{}{})
 	}
 	
 	return monitor
@@ -209,14 +210,15 @@ func (m *NATSSchedulerMonitor) InitializeMonitoringStreams() error {
 	
 	// Subscribe to metrics from other nodes
 	if err := m.subscribeToClusterMetrics(); err != nil {
-		m.logger.Warn("Failed to subscribe to cluster metrics", "error", err)
+		m.logger.Warn("Failed to subscribe to cluster metrics", map[string]interface{}{"error": err.Error()})
 	}
 	
-	m.logger.Info("NATS monitoring streams initialized",
-		"metrics_subject", m.config.MetricsSubject,
-		"alerts_subject", m.config.AlertsSubject,
-		"health_subject", m.config.HealthCheckSubject,
-		"node_id", m.nodeID)
+	m.logger.Info("NATS monitoring streams initialized", map[string]interface{}{
+		"metrics_subject": m.config.MetricsSubject,
+		"alerts_subject": m.config.AlertsSubject,
+		"health_subject": m.config.HealthCheckSubject,
+		"node_id": m.nodeID,
+	})
 	
 	return nil
 }
@@ -227,7 +229,7 @@ func (m *NATSSchedulerMonitor) subscribeToClusterMetrics() error {
 	_, err := m.conn.Subscribe(m.config.MetricsSubject, func(msg *nats.Msg) {
 		var nodeMetrics NodeMetrics
 		if err := json.Unmarshal(msg.Data, &nodeMetrics); err != nil {
-			m.logger.Error("Failed to unmarshal node metrics", "error", err)
+			m.logger.Error("Failed to unmarshal node metrics", err, map[string]interface{}{})
 			return
 		}
 		
@@ -237,7 +239,7 @@ func (m *NATSSchedulerMonitor) subscribeToClusterMetrics() error {
 			m.distributedMetrics[nodeMetrics.NodeID] = &nodeMetrics
 			m.mu.Unlock()
 			
-			m.logger.Debug("Received metrics from node", "node_id", nodeMetrics.NodeID)
+			m.logger.Debug("Received metrics from node", map[string]interface{}{"node_id": nodeMetrics.NodeID})
 		}
 	})
 	
@@ -249,16 +251,17 @@ func (m *NATSSchedulerMonitor) subscribeToClusterMetrics() error {
 	_, err = m.conn.Subscribe(m.config.AlertsSubject, func(msg *nats.Msg) {
 		var alert Alert
 		if err := json.Unmarshal(msg.Data, &alert); err != nil {
-			m.logger.Error("Failed to unmarshal alert", "error", err)
+			m.logger.Error("Failed to unmarshal alert", err, map[string]interface{}{})
 			return
 		}
 		
-		m.logger.Info("Received alert",
-			"id", alert.ID,
-			"level", alert.Level,
-			"type", alert.Type,
-			"message", alert.Message,
-			"node_id", alert.NodeID)
+		m.logger.Info("Received alert", map[string]interface{}{
+			"id": alert.ID,
+			"level": alert.Level,
+			"type": alert.Type,
+			"message": alert.Message,
+			"node_id": alert.NodeID,
+		})
 	})
 	
 	if err != nil {
@@ -288,7 +291,9 @@ func (m *NATSSchedulerMonitor) StartMonitoring() error {
 	// Start cluster monitoring goroutine
 	go m.clusterMonitoringLoop()
 	
-	m.logger.Info("NATS monitoring started", "node_id", m.nodeID)
+	m.logger.Info("NATS monitoring started", map[string]interface{}{
+		"node_id": m.nodeID,
+	})
 	return nil
 }
 
@@ -303,7 +308,7 @@ func (m *NATSSchedulerMonitor) metricsPublishLoop() {
 			return
 		case <-ticker.C:
 			if err := m.publishNodeMetrics(); err != nil {
-				m.logger.Error("Failed to publish node metrics", "error", err)
+				m.logger.Error("Failed to publish node metrics", err, map[string]interface{}{})
 			}
 		}
 	}
@@ -320,7 +325,7 @@ func (m *NATSSchedulerMonitor) healthCheckLoop() {
 			return
 		case <-ticker.C:
 			if err := m.performHealthCheck(); err != nil {
-				m.logger.Error("Health check failed", "error", err)
+				m.logger.Error("Health check failed", err, map[string]interface{}{})
 			}
 		}
 	}
@@ -384,7 +389,7 @@ func (m *NATSSchedulerMonitor) publishNodeMetrics() error {
 	m.lastMetricsPublish = time.Now()
 	m.mu.Unlock()
 	
-	m.logger.Debug("Node metrics published", "node_id", m.nodeID)
+	m.logger.Debug("Node metrics published", map[string]interface{}{"node_id": m.nodeID})
 	return nil
 }
 
@@ -523,20 +528,21 @@ func (m *NATSSchedulerMonitor) publishAlert(alertType, level, message string, va
 	
 	data, err := json.Marshal(alert)
 	if err != nil {
-		m.logger.Error("Failed to marshal alert", "error", err)
+		m.logger.Error("Failed to marshal alert", err, map[string]interface{}{})
 		return
 	}
 	
 	if err := m.conn.Publish(m.config.AlertsSubject, data); err != nil {
-		m.logger.Error("Failed to publish alert", "error", err)
+		m.logger.Error("Failed to publish alert", err, map[string]interface{}{})
 		return
 	}
 	
-	m.logger.Warn("Alert published",
-		"id", alert.ID,
-		"type", alertType,
-		"level", level,
-		"message", message)
+	m.logger.Warn("Alert published", map[string]interface{}{
+		"id":      alert.ID,
+		"type":    alertType,
+		"level":   level,
+		"message": message,
+	})
 }
 
 // StopMonitoring stops the monitoring loop
@@ -551,7 +557,9 @@ func (m *NATSSchedulerMonitor) StopMonitoring() error {
 	m.monitoringCancel()
 	m.monitoringActive = false
 	
-	m.logger.Info("NATS monitoring stopped", "node_id", m.nodeID)
+	m.logger.Info("NATS monitoring stopped", map[string]interface{}{
+		"node_id": m.nodeID,
+	})
 	return nil
 }
 
@@ -612,14 +620,17 @@ func (m *NATSSchedulerMonitor) DetectIntent(qList []string, textWorkingMemory []
 		return nil, fmt.Errorf("failed to build intent recognition prompt: %w", err)
 	}
 	
-	m.logger.Debug("Detecting intent", "query_count", len(qList), "memory_count", len(textWorkingMemory))
+	m.logger.Debug("Detecting intent", map[string]interface{}{
+		"query_count":  len(qList),
+		"memory_count": len(textWorkingMemory),
+	})
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := types.MessageList{
+		{Role: "user", Content: prompt},
 	}
 	
-	response, err := m.chatLLM.Generate(messages)
+	response, err := m.chatLLM.Generate(context.Background(), messages)
 	if err != nil {
 		m.IncrementErrorCount()
 		return nil, fmt.Errorf("LLM generation failed: %w", err)
@@ -652,10 +663,11 @@ func (m *NATSSchedulerMonitor) DetectIntent(qList []string, textWorkingMemory []
 	
 	m.IncrementProcessedTasks()
 	
-	m.logger.Debug("Intent detected", 
-		"trigger_retrieval", result.TriggerRetrieval,
-		"missing_evidence_count", len(result.MissingEvidence),
-		"confidence", result.Confidence)
+	m.logger.Debug("Intent detected", map[string]interface{}{
+		"trigger_retrieval":       result.TriggerRetrieval,
+		"missing_evidence_count": len(result.MissingEvidence),
+		"confidence":             result.Confidence,
+	})
 	
 	return result, nil
 }
@@ -692,14 +704,14 @@ func (m *NATSSchedulerMonitor) UpdateFreq(answer string) ([]*ActivationMemoryIte
 	}
 	
 	// Generate response from LLM
-	messages := []map[string]string{
-		{"role": "user", "content": prompt},
+	messages := types.MessageList{
+		{Role: "user", Content: prompt},
 	}
 	
-	response, err := m.chatLLM.Generate(messages)
+	response, err := m.chatLLM.Generate(context.Background(), messages)
 	if err != nil {
 		m.IncrementErrorCount()
-		m.logger.Error("LLM generation failed for frequency update", "error", err)
+		m.logger.Error("LLM generation failed for frequency update", err, map[string]interface{}{})
 		return freqList, err
 	}
 	
@@ -707,7 +719,7 @@ func (m *NATSSchedulerMonitor) UpdateFreq(answer string) ([]*ActivationMemoryIte
 	result, err := m.extractJSONDict(response)
 	if err != nil {
 		m.IncrementErrorCount()
-		m.logger.Error("Failed to parse frequency response", "error", err)
+		m.logger.Error("Failed to parse frequency response", err, map[string]interface{}{})
 		return freqList, err
 	}
 	
@@ -721,7 +733,7 @@ func (m *NATSSchedulerMonitor) UpdateFreq(answer string) ([]*ActivationMemoryIte
 			return updatedItems, nil
 		} else {
 			m.IncrementErrorCount()
-			m.logger.Error("Failed to parse updated activation memory items", "error", err)
+			m.logger.Error("Failed to parse updated activation memory items", err, map[string]interface{}{})
 		}
 	}
 	
@@ -847,4 +859,30 @@ func (m *NATSSchedulerMonitor) extractJSONDict(response string) (map[string]inte
 	}
 	
 	return nil, fmt.Errorf("failed to extract JSON from response: %s", response)
+}
+
+// Helper functions for type conversion
+func getStringValue(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+func getFloat64Value(m map[string]interface{}, key string) float64 {
+	if val, ok := m[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return v
+		case float32:
+			return float64(v)
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		}
+	}
+	return 0.0
 }

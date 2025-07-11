@@ -32,7 +32,7 @@ type MemChatCreator func(config *MemChatConfig) (BaseMemChat, error)
 // NewMemChatFactory creates a new MemChat factory
 func NewMemChatFactory() *MemChatFactory {
 	factory := &MemChatFactory{
-		logger:             logger.NewLogger("MemChatFactory"),
+		logger:             logger.NewLogger(),
 		registeredBackends: make(map[MemChatBackend]MemChatCreator),
 	}
 	

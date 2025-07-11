@@ -100,9 +100,8 @@ func (gtm *GeneralTextMemory) Add(ctx context.Context, memories []*types.Textual
 		// Generate embedding if embedder is available
 		if gtm.embedder != nil {
 			if err := gtm.generateEmbedding(ctx, memory); err != nil {
-				gtm.logger.Error("Failed to generate embedding", map[string]interface{}{
+				gtm.logger.Error("Failed to generate embedding", err, map[string]interface{}{
 					"memory_id": memory.ID,
-					"error":     err.Error(),
 				})
 			}
 		}
@@ -113,9 +112,8 @@ func (gtm *GeneralTextMemory) Add(ctx context.Context, memories []*types.Textual
 		// Store in vector database if available
 		if gtm.vectorDB != nil && gtm.embeddings[memory.ID] != nil {
 			if err := gtm.storeInVectorDB(memory); err != nil {
-				gtm.logger.Error("Failed to store in vector database", map[string]interface{}{
+				gtm.logger.Error("Failed to store in vector database", err, map[string]interface{}{
 					"memory_id": memory.ID,
-					"error":     err.Error(),
 				})
 			}
 		}
@@ -209,9 +207,8 @@ func (gtm *GeneralTextMemory) Update(ctx context.Context, id string, memory *typ
 	// Regenerate embedding
 	if gtm.embedder != nil {
 		if err := gtm.generateEmbedding(ctx, memory); err != nil {
-			gtm.logger.Error("Failed to regenerate embedding", map[string]interface{}{
+			gtm.logger.Error("Failed to regenerate embedding", err, map[string]interface{}{
 				"memory_id": id,
-				"error":     err.Error(),
 			})
 		}
 	}
@@ -245,9 +242,8 @@ func (gtm *GeneralTextMemory) Delete(ctx context.Context, ids []string) error {
 			// Remove from vector database
 			if gtm.vectorDB != nil {
 				if err := gtm.removeFromVectorDB(id); err != nil {
-					gtm.logger.Error("Failed to remove from vector database", map[string]interface{}{
+					gtm.logger.Error("Failed to remove from vector database", err, map[string]interface{}{
 						"memory_id": id,
-						"error":     err.Error(),
 					})
 				}
 			}
@@ -288,9 +284,7 @@ func (gtm *GeneralTextMemory) DeleteAll(ctx context.Context) error {
 	// Clear vector database
 	if gtm.vectorDB != nil {
 		if err := gtm.clearVectorDB(); err != nil {
-			gtm.logger.Error("Failed to clear vector database", map[string]interface{}{
-				"error": err.Error(),
-			})
+			gtm.logger.Error("Failed to clear vector database", err, map[string]interface{}{})
 		}
 	}
 	
@@ -336,9 +330,7 @@ func (gtm *GeneralTextMemory) Search(ctx context.Context, query string, topK int
 	if gtm.internetRetriever != nil && len(results) < topK {
 		internetResults, err := gtm.searchInternet(ctx, query, topK-len(results))
 		if err != nil {
-			gtm.logger.Error("Failed to search internet", map[string]interface{}{
-				"error": err.Error(),
-			})
+			gtm.logger.Error("Failed to search internet", err, map[string]interface{}{})
 		} else {
 			results = append(results, internetResults...)
 		}
@@ -528,38 +520,41 @@ func (gtm *GeneralTextMemory) generateID() string {
 }
 
 func (gtm *GeneralTextMemory) generateEmbedding(ctx context.Context, memory *types.TextualMemoryItem) error {
-	embeddings, err := gtm.embedder.Embed(ctx, []string{memory.Memory})
+	embedding, err := gtm.embedder.Embed(ctx, memory.Memory)
 	if err != nil {
 		return err
 	}
 	
-	if len(embeddings) > 0 {
-		gtm.embeddings[memory.ID] = embeddings[0]
-	}
+	gtm.embeddings[memory.ID] = embedding
 	
 	return nil
 }
 
 func (gtm *GeneralTextMemory) storeInVectorDB(memory *types.TextualMemoryItem) error {
+	ctx := context.Background()
 	if embedding, exists := gtm.embeddings[memory.ID]; exists {
 		// Store in vector database
-		return gtm.vectorDB.Add(ctx, []types.VectorSearchResult{
-			{
-				ID:       memory.ID,
-				Score:    1.0,
-				Metadata: memory.Metadata,
-			},
-		})
+		return gtm.vectorDB.Insert(ctx, []types.EmbeddingVector{embedding}, []map[string]interface{}{memory.Metadata})
 	}
 	return nil
 }
 
 func (gtm *GeneralTextMemory) removeFromVectorDB(id string) error {
+	ctx := context.Background()
 	return gtm.vectorDB.Delete(ctx, []string{id})
 }
 
 func (gtm *GeneralTextMemory) clearVectorDB() error {
-	return gtm.vectorDB.Clear(ctx)
+	ctx := context.Background()
+	// Get all memory IDs to delete
+	ids := make([]string, 0, len(gtm.memories))
+	for id := range gtm.memories {
+		ids = append(ids, id)
+	}
+	if len(ids) > 0 {
+		return gtm.vectorDB.Delete(ctx, ids)
+	}
+	return nil
 }
 
 func (gtm *GeneralTextMemory) fastSearch(ctx context.Context, query string, topK int) ([]*types.TextualMemoryItem, error) {
@@ -583,16 +578,10 @@ func (gtm *GeneralTextMemory) semanticSearch(ctx context.Context, query string, 
 	}
 	
 	// Generate query embedding
-	queryEmbeddings, err := gtm.embedder.Embed(ctx, []string{query})
+	queryEmbedding, err := gtm.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	
-	if len(queryEmbeddings) == 0 {
-		return gtm.fastSearch(ctx, query, topK)
-	}
-	
-	queryEmbedding := queryEmbeddings[0]
 	
 	// Calculate similarities
 	type memoryScore struct {
@@ -603,7 +592,7 @@ func (gtm *GeneralTextMemory) semanticSearch(ctx context.Context, query string, 
 	scores := make([]*memoryScore, 0)
 	gtm.memMu.RLock()
 	for id, embedding := range gtm.embeddings {
-		similarity := gtm.cosineSimilarity(queryEmbedding, embedding)
+		similarity := gtm.cosineSimilarity([]float32(queryEmbedding), embedding)
 		if similarity > 0.1 { // Threshold
 			scores = append(scores, &memoryScore{
 				id:    id,
@@ -684,8 +673,8 @@ func (gtm *GeneralTextMemory) searchInternet(ctx context.Context, query string, 
 		return []*types.TextualMemoryItem{}, nil
 	}
 	
-	// Retrieve from internet
-	internetResults, err := gtm.internetRetriever.Retrieve(ctx, query, topK)
+	// Retrieve from internet using Search method
+	internetResults, err := gtm.internetRetriever.Search(ctx, query, topK)
 	if err != nil {
 		return nil, err
 	}
@@ -699,7 +688,6 @@ func (gtm *GeneralTextMemory) searchInternet(ctx context.Context, query string, 
 			Metadata: map[string]interface{}{
 				"url":           result.URL,
 				"title":         result.Title,
-				"source":        result.Source,
 				"retrieved_at":  result.RetrievedAt,
 				"internet_score": result.Score,
 				"memory_type":   "internet",
@@ -905,11 +893,6 @@ func (tfidf *TfIdfIndex) search(query string, topK int) []*tfIdfResult {
 	}
 	
 	// Calculate similarities
-	type tfIdfResult struct {
-		id    string
-		score float64
-	}
-	
 	results := make([]*tfIdfResult, 0)
 	
 	for docID, docWeights := range tfidf.termWeights {

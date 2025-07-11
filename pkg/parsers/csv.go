@@ -118,8 +118,9 @@ func (cp *CSVParser) ParseFile(ctx context.Context, filePath string, config *Par
 	// Add file-specific metadata
 	if doc.Metadata != nil {
 		doc.Metadata.FileExtension = strings.ToLower(filepath.Ext(filePath))
-		doc.Metadata.CreatedAt = &fileInfo.ModTime()
-		doc.Metadata.ModifiedAt = &fileInfo.ModTime()
+		modTime := fileInfo.ModTime()
+		doc.Metadata.CreatedAt = &modTime
+		doc.Metadata.ModifiedAt = &modTime
 		
 		// Extract title from filename
 		filename := filepath.Base(filePath)

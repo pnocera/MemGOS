@@ -499,7 +499,7 @@ func (om *OptimizationManager) pruneAdapter(adapter *LoRAAdapter) error {
 // quantizeAdapter quantizes adapter weights
 func (om *OptimizationManager) quantizeAdapter(adapter *LoRAAdapter) error {
 	// Simple quantization simulation
-	quantizationFactor := float32(1 << om.quantizationBits)
+	quantizationFactor := float32(int(1) << uint(om.quantizationBits))
 	
 	for layer := range adapter.WeightA {
 		for i, weight := range adapter.WeightA[layer] {

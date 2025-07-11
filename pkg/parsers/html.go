@@ -112,8 +112,9 @@ func (hp *HTMLParser) ParseFile(ctx context.Context, filePath string, config *Pa
 	// Add file-specific metadata
 	if doc.Metadata != nil {
 		doc.Metadata.FileExtension = strings.ToLower(filepath.Ext(filePath))
-		doc.Metadata.CreatedAt = &fileInfo.ModTime()
-		doc.Metadata.ModifiedAt = &fileInfo.ModTime()
+		modTime := fileInfo.ModTime()
+		doc.Metadata.CreatedAt = &modTime
+		doc.Metadata.ModifiedAt = &modTime
 		
 		// Extract title from filename if not already set
 		if doc.Metadata.Title == "" {
@@ -777,8 +778,8 @@ func (hp *HTMLParser) decodeHTMLEntities(content string) string {
 		"&hellip;": "...",
 		"&mdash;":  "—",
 		"&ndash;":  "–",
-		"&ldquo;":  """,
-		"&rdquo;":  """,
+		"&ldquo;":  "\"",
+		"&rdquo;":  "\"",
 		"&lsquo;":  "'",
 		"&rsquo;":  "'",
 	}
@@ -971,12 +972,12 @@ func (hp *HTMLParser) extractImagesWithGoquery(doc *goquery.Document) []Image {
 		}
 		
 		// Try to extract dimensions
-		if width, exists := img.Attr("width"); exists {
+		if _, exists := img.Attr("width"); exists {
 			// Convert to int if needed
 			image.Width = 0 // Placeholder - would need proper conversion
 		}
 		
-		if height, exists := img.Attr("height"); exists {
+		if _, exists := img.Attr("height"); exists {
 			// Convert to int if needed
 			image.Height = 0 // Placeholder - would need proper conversion
 		}

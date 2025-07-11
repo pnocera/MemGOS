@@ -180,9 +180,8 @@ func (lm *LoRAMemory) Add(ctx context.Context, memories []*types.ParametricMemor
 		
 		// Handle adapter data
 		if err := lm.processAdapterMemory(memory); err != nil {
-			lm.logger.Error("Failed to process adapter memory", map[string]interface{}{
+			lm.logger.Error("Failed to process adapter memory", err, map[string]interface{}{
 				"memory_id": memory.ID,
-				"error":     err.Error(),
 			})
 		}
 	}
@@ -876,9 +875,8 @@ func (lm *LoRAMemory) Update(ctx context.Context, id string, memory *types.Param
 	
 	// Reprocess adapter if needed
 	if err := lm.processAdapterMemory(memory); err != nil {
-		lm.logger.Error("Failed to reprocess adapter memory", map[string]interface{}{
+		lm.logger.Error("Failed to reprocess adapter memory", err, map[string]interface{}{
 			"memory_id": id,
-			"error":     err.Error(),
 		})
 	}
 	
@@ -967,9 +965,8 @@ func (lm *LoRAMemory) Compress(ctx context.Context, compressionRatio float64) er
 	lm.adapterManager.mu.Lock()
 	for _, adapter := range lm.adapterManager.activeAdapters {
 		if err := lm.parameterManager.CompressAdapter(adapter); err != nil {
-			lm.logger.Error("Failed to compress adapter", map[string]interface{}{
+			lm.logger.Error("Failed to compress adapter", err, map[string]interface{}{
 				"adapter_id": adapter.ID,
-				"error":      err.Error(),
 			})
 		} else {
 			compressedCount++
@@ -995,9 +992,8 @@ func (lm *LoRAMemory) Optimize(ctx context.Context) error {
 	lm.adapterManager.mu.Lock()
 	for _, adapter := range lm.adapterManager.activeAdapters {
 		if err := lm.optimizationManager.OptimizeAdapter(adapter); err != nil {
-			lm.logger.Error("Failed to optimize adapter", map[string]interface{}{
+			lm.logger.Error("Failed to optimize adapter", err, map[string]interface{}{
 				"adapter_id": adapter.ID,
-				"error":      err.Error(),
 			})
 		}
 	}
@@ -1243,9 +1239,8 @@ func (lm *LoRAMemory) loadFromSaveData(saveData map[string]interface{}) error {
 					
 					// Process adapter memory
 					if err := lm.processAdapterMemory(memory); err != nil {
-						lm.logger.Error("Failed to process loaded adapter", map[string]interface{}{
+						lm.logger.Error("Failed to process loaded adapter", err, map[string]interface{}{
 							"memory_id": id,
-							"error":     err.Error(),
 						})
 					}
 				}
