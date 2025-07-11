@@ -15,6 +15,7 @@ MemGOS is a comprehensive Go 1.24 implementation of the Memory Operating System 
 
 ### Advanced Capabilities
 - **🔍 Semantic Search**: Vector-based similarity search across memories
+- **🧠 Enhanced Chunking**: 11 modern chunking strategies with AI-driven quality assessment
 - **🏗️ Modular Architecture**: Interface-driven design for easy extensibility
 - **📊 Observability**: Built-in metrics, logging, and health checks
 - **🔄 Scheduling**: Background memory processing and optimization
@@ -298,6 +299,7 @@ memgos/
 │   ├── errors/          # Error handling
 │   ├── core/            # MOS Core implementation
 │   ├── memory/          # Memory implementations
+│   ├── chunkers/        # Enhanced chunking system (11 strategies)
 │   ├── llm/             # LLM integrations
 │   ├── embedders/       # Embedding providers
 │   ├── vectordb/        # Vector databases
@@ -319,6 +321,13 @@ memgos/
 - **ActivationMemory**: KV cache and model activations
 - **ParametricMemory**: Model parameter storage
 - **MemCube**: Container for all memory types
+
+#### Enhanced Chunking System
+- **11 Modern Strategies**: Embedding-based, contextual, agentic, multi-modal, hierarchical
+- **Production Features**: Monitoring, caching, circuit breakers, rate limiting
+- **Quality Assessment**: 8-dimensional real-time quality metrics
+- **A/B Testing**: Statistical comparison framework
+- **Configuration Presets**: Optimized for RAG, research, technical docs, chatbots
 
 #### MOS Core
 - **MOSCore**: Central orchestration layer
@@ -483,11 +492,13 @@ make dev-test
 
 ### Implementation Guides
 - [**Core Implementation**](docs/CORE_IMPLEMENTATION.md) - Detailed implementation guide
+- [**Enhanced Chunking System**](docs/chunking/README.md) - Complete chunking documentation
 - [**MCP Server Implementation**](docs/mcp/api-reference.md) - Complete MCP tool reference
 - [**Memory Systems**](pkg/memory/README.md) - Memory backend implementations
 - [**LLM Integrations**](pkg/llm/README.md) - Language model integrations
 - [**Vector Databases**](pkg/vectordb/README.md) - Vector database backends
 - [**Graph Databases**](pkg/graphdb/README.md) - KuzuDB and Neo4j implementations
+- [**Chunking Strategies**](pkg/chunkers/README.md) - Chunking system reference
 
 ## 🤝 Contributing
 
@@ -531,8 +542,9 @@ MemGOS is inspired by the Python [MemOS](https://github.com/MemTensor/MemOS) pro
 - [ ] Comprehensive testing
 
 ### Version 1.1
+- [x] **Enhanced Chunking System** - 11 modern chunking strategies with AI-driven quality assessment
 - [ ] Advanced semantic search
-- [ ] Distributed memory systems
+- [ ] Distributed memory systems  
 - [ ] Performance optimizations
 - [ ] Additional database backends
 
