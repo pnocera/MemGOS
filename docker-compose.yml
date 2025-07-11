@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  memgos:
+    build: .
+    container_name: memgos-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    environment:
+      - MEMGOS_LOG_LEVEL=info
+      - MEMGOS_API_PORT=8080
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - memgos-network
+
+  memgos-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: memgos-mcp
+    depends_on:
+      memgos:
+        condition: service_healthy
+    environment:
+      - MEMGOS_API_TOKEN=${MEMGOS_API_TOKEN}
+      - MEMGOS_API_URL=http://memgos:8080
+      - MEMGOS_USER_ID=default-user
+      - MEMGOS_SESSION_ID=mcp-session
+    volumes:
+      - ./logs:/app/logs
+    stdin_open: true
+    tty: true
+    networks:
+      - memgos-network
+
+  # Optional: Redis for caching (if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: memgos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - memgos-network
+
+  # Optional: Qdrant for vector database (if needed)
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: memgos-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - memgos-network
+
+networks:
+  memgos-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  qdrant_data:

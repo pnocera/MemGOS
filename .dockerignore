@@ -1,0 +1,67 @@
+# Build artifacts
+build/
+dist/
+coverage/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/*.md
+docs/**/*.md
+*.md
+LICENSE*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+*_test.go
+
+# Development files
+.env
+.env.*
+*.orig
+
+# Docker files (except the ones being used)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Dependencies that will be downloaded
+vendor/
+
+# Temporary files
+tmp/
+temp/
+
+# Configuration files that might contain secrets
+config/local*
+config/dev*
+config/prod*
+
+# Data directories
+data/
+memory/
+
+# Claude Flow specific files
+claude-flow*
+coordination/
+
+# Specific files to exclude
+prompts.txt
+test_mcp.json
+CLAUDE.md

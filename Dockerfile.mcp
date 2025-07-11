@@ -1,0 +1,50 @@
+# Multi-stage build for MemGOS MCP server
+FROM golang:1.24-alpine AS builder
+
+# Install necessary build tools
+RUN apk add --no-cache git ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the MCP server
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags '-w -s -extldflags "-static"' \
+    -o memgos-mcp ./cmd/memgos-mcp
+
+# Final stage
+FROM alpine:latest
+
+# Install necessary runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata
+
+# Create non-root user
+RUN addgroup -g 1000 memgos && \
+    adduser -D -u 1000 -G memgos memgos
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/memgos-mcp .
+
+# Switch to non-root user
+USER memgos
+
+# Environment variables for MCP server
+ENV MEMGOS_API_TOKEN=""
+ENV MEMGOS_API_URL="http://localhost:8080"
+ENV MEMGOS_USER_ID="default-user"
+ENV MEMGOS_SESSION_ID="mcp-session"
+
+# Default command
+CMD ["./memgos-mcp", "--api-url", "${MEMGOS_API_URL}", "--user", "${MEMGOS_USER_ID}", "--session", "${MEMGOS_SESSION_ID}"]

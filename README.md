@@ -53,6 +53,18 @@ make build
 go install github.com/memtensor/memgos/cmd/memgos@latest
 ```
 
+### 🐳 Docker Installation (Recommended)
+
+```bash
+# Quick start with Docker Compose
+git clone https://github.com/memtensor/memgos.git
+cd memgos
+echo "MEMGOS_API_TOKEN=your-api-token-here" > .env
+docker-compose up -d
+```
+
+**📋 Complete Docker Setup Guide**: [docs/docker/README.md](docs/docker/README.md)
+
 ## 🚀 Quick Start
 
 ### 1. Basic Configuration
