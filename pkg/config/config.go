@@ -348,6 +348,11 @@ type MOSConfig struct {
 	MetricsPort          int              `yaml:"metrics_port,omitempty" json:"metrics_port,omitempty"`
 	HealthCheckEnabled   bool             `yaml:"health_check_enabled" json:"health_check_enabled"`
 	HealthCheckPort      int              `yaml:"health_check_port,omitempty" json:"health_check_port,omitempty"`
+	
+	// API configuration for MCP client mode
+	APIToken             string           `yaml:"api_token,omitempty" json:"api_token,omitempty"`
+	APIURL               string           `yaml:"api_url,omitempty" json:"api_url,omitempty"`
+	MCPMode              bool             `yaml:"mcp_mode" json:"mcp_mode"`
 }
 
 // NewMOSConfig creates a new MOS configuration

@@ -22,6 +22,7 @@ MemGOS is a comprehensive Go 1.24 implementation of the Memory Operating System 
 - **🔐 API Token Auth**: Secure programmatic access with scoped API tokens
 - **💬 Chat Integration**: Memory-augmented chat functionality
 - **📚 Swagger API**: Complete OpenAPI 3.0 documentation and interactive UI
+- **🔌 MCP Integration**: Model Context Protocol server for AI tool integration
 
 ### LLM Integrations
 - **OpenAI**: GPT models via API
@@ -127,7 +128,49 @@ curl -X GET http://localhost:8080/api/v1/memories \
   -H "Authorization: Bearer <api-token>"
 ```
 
-### 4. API Authentication
+### 4. MCP Server Mode
+
+MemGOS includes a comprehensive Model Context Protocol (MCP) server that enables AI tools and applications to interact with memory systems through a standardized protocol.
+
+```bash
+# Build the MCP server
+go build -o memgos-mcp ./cmd/memgos-mcp
+
+# Run MCP server with API token authentication
+./memgos-mcp --token your-api-token --api-url http://localhost:8080
+
+# Run with environment variable
+export MEMGOS_API_TOKEN="your-api-token"
+./memgos-mcp --api-url http://localhost:8080
+
+# Use with Claude Desktop or other MCP clients
+# Add to Claude Desktop config (~/.claude/config.json):
+{
+  "mcpServers": {
+    "memgos": {
+      "command": "/path/to/memgos-mcp",
+      "args": ["--token", "your-api-token", "--api-url", "http://localhost:8080"]
+    }
+  }
+}
+```
+
+#### MCP Server Features
+- **🔧 16 Comprehensive Tools**: Complete memory management, chat, user operations
+- **🔐 Secure Authentication**: API token-based authentication with Bearer tokens
+- **📖 Self-Documenting**: Each tool includes detailed parameter schemas and examples
+- **🔄 Dual Architecture**: Supports both API mode and direct MOSCore integration
+- **📊 Health Monitoring**: Built-in health checks and connection validation
+- **⚡ Stdio Transport**: Standard MCP stdio communication protocol
+
+#### Available MCP Tools
+- **Memory Operations**: search_memories, add_memory, get_memory, update_memory, delete_memory
+- **Cube Management**: register_cube, list_cubes, cube_info
+- **Chat Integration**: chat, chat_history, context_search
+- **User Management**: get_user_info, session_info, validate_access
+- **System Tools**: health_check, list_tools (self-discovery)
+
+### 5. API Authentication
 
 MemGOS supports two authentication methods:
 
@@ -179,7 +222,7 @@ curl -X DELETE http://localhost:8080/api/v1/tokens/<token-id> \
 - **`admin`**: Administrative access including user management
 - **`full`**: Full access equivalent to user session
 
-### 5. Interactive Mode
+### 6. Interactive Mode
 ```bash
 # Start interactive CLI
 memgos --interactive --config config.yaml
@@ -199,7 +242,10 @@ memgos --interactive --config config.yaml
 ### Package Structure
 ```
 memgos/
-├── cmd/memgos/          # Main application
+├── cmd/
+│   ├── memgos/          # Main application
+│   └── memgos-mcp/      # MCP server application
+├── mcp/                 # MCP server implementation
 ├── api/                 # REST API server with authentication
 ├── pkg/
 │   ├── types/           # Core data structures
@@ -216,7 +262,7 @@ memgos/
 │   ├── schedulers/      # Memory schedulers
 │   ├── users/           # User management and authentication
 │   └── chat/            # Chat functionality
-├── docs/                # Swagger/OpenAPI documentation
+├── docs/                # Documentation and guides
 ├── examples/            # Usage examples
 └── tests/               # Test files
 ```
@@ -243,6 +289,13 @@ memgos/
 - **User Management**: User registration, authentication, and authorization
 - **Memory Operations**: CRUD operations for all memory types
 - **Token Management**: API token creation, listing, and revocation
+
+#### MCP Server
+- **Protocol Implementation**: Full Model Context Protocol server
+- **Tool Integration**: 16 comprehensive tools for memory and chat operations
+- **Secure Communication**: API token-based authentication with Bearer headers
+- **Self-Documentation**: Complete tool schemas with parameter validation
+- **Client Compatibility**: Works with Claude Desktop, VS Code, and other MCP clients
 
 ## 🔌 API Endpoints
 
@@ -363,6 +416,7 @@ make dev-test
 ### User Documentation
 - [**User Guide**](docs/user-guide/README.md) - Complete guide for using MemGOS
 - [**API Reference**](docs/api/README.md) - Comprehensive REST API documentation
+- [**MCP Server Guide**](docs/mcp/README.md) - Model Context Protocol server documentation
 - [**Examples**](docs/examples/README.md) - Practical usage examples and tutorials
 - [**Troubleshooting**](docs/user-guide/troubleshooting.md) - Common issues and solutions
 
@@ -374,6 +428,7 @@ make dev-test
 
 ### Implementation Guides
 - [**Core Implementation**](docs/CORE_IMPLEMENTATION.md) - Detailed implementation guide
+- [**MCP Server Implementation**](docs/mcp/api-reference.md) - Complete MCP tool reference
 - [**Memory Systems**](pkg/memory/README.md) - Memory backend implementations
 - [**LLM Integrations**](pkg/llm/README.md) - Language model integrations
 - [**Vector Databases**](pkg/vectordb/README.md) - Vector database backends
@@ -415,6 +470,8 @@ MemGOS is inspired by the Python [MemOS](https://github.com/MemTensor/MemOS) pro
 - [x] **API token authentication**
 - [x] **Swagger/OpenAPI documentation**
 - [x] **User management system**
+- [x] **MCP server implementation**
+- [x] **16 MCP tools with self-documentation**
 - [ ] Comprehensive testing
 
 ### Version 1.1

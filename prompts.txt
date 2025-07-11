@@ -9,3 +9,6 @@
 
 Goal: provide an API token based authentication. open a github issue in https://github.com/pnocera/MemGOS repo.let each agent put their reportings in this github issue after each action.
 
+Goal: provide a self-documenting MCP server using github.com/mark3labs/mcp-go. open a github issue in https://github.com/pnocera/MemGOS repo.let each agent put their reportings in this github issue after each action.
+
+./claude-flow hive-mind spawn "Goal: Implement https://github.com/pnocera/MemGOS/issues/9 . let each agent report in this github issue after each action." --claude

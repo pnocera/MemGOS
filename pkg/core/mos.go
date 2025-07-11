@@ -205,6 +205,15 @@ func (mos *MOSCore) initializeUserManager() error {
 		DefaultRole:         "user",
 		AllowSelfSignup:     false,
 		RequireEmailVerification: false,
+		PasswordPolicy: users.PasswordPolicy{
+			MinLength:        8,
+			RequireUppercase: false,
+			RequireLowercase: false,
+			RequireNumbers:   false,
+			RequireSymbols:   false,
+			MaxAge:           90 * 24 * time.Hour,
+			PreventReuse:     0,
+		},
 	}
 	
 	// Create user manager instance
