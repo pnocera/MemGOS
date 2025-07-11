@@ -1,0 +1,135 @@
+# NATS KV MemGOS Configuration Example
+# This configuration demonstrates using NATS.io with Key-Value store instead of Redis
+
+# User and session configuration
+user_id: "nats-user"
+session_id: "nats-session"
+
+# Memory feature flags
+enable_textual_memory: true
+enable_activation_memory: true
+enable_parametric_memory: true
+enable_mem_scheduler: true
+
+# Search configuration
+top_k: 10
+
+# Logging configuration
+log_level: "info"
+log_file: "logs/memgos-nats.log"
+
+# Metrics and monitoring
+metrics_enabled: true
+metrics_port: 9090
+health_check_enabled: true
+health_check_port: 8080
+
+# Chat model configuration
+chat_model:
+  backend: "openai"
+  model: "gpt-4"
+  api_key: "${OPENAI_API_KEY}"
+  max_tokens: 2048
+  temperature: 0.7
+  timeout: "60s"
+
+# Memory reader configuration
+mem_reader:
+  backend: "tree_text"
+  memory_filename: "textual_memory.json"
+  top_k: 10
+  chunk_size: 1500
+  chunk_overlap: 300
+  
+  # Embedder configuration
+  embedder:
+    backend: "openai"
+    model: "text-embedding-ada-002"
+    api_key: "${OPENAI_API_KEY}"
+    dimension: 1536
+    timeout: "30s"
+  
+  # Vector database configuration
+  vector_db:
+    backend: "qdrant"
+    host: "localhost"
+    port: 6333
+    collection: "memories"
+    dimension: 1536
+    timeout: "30s"
+
+# Memory scheduler configuration with NATS KV
+mem_scheduler:
+  enabled: true
+  
+  # NATS Configuration
+  nats_urls: 
+    - "nats://localhost:4222"
+    - "nats://localhost:4223"  # Optional cluster member
+  nats_username: ""
+  nats_password: "${NATS_PASSWORD}"
+  nats_token: ""
+  nats_max_reconnect: 10
+  
+  # NATS KV Configuration
+  use_nats_kv: true
+  nats_kv_bucket_name: "memgos-scheduler"
+  nats_kv_description: "MemGOS Scheduler Key-Value Store"
+  nats_kv_max_value_size: 2097152      # 2MB
+  nats_kv_history: 20                  # Keep 20 revisions
+  nats_kv_max_bytes: 5368709120        # 5GB
+  nats_kv_storage: "File"              # Or "Memory" for faster but non-persistent
+  nats_kv_replicas: 1                  # Single replica for development
+  
+  # JetStream Configuration
+  stream_name: "SCHEDULER_STREAM"
+  stream_subjects: 
+    - "scheduler.>"
+    - "memgos.scheduler.>"
+  consumer_name: "scheduler_consumer"
+  consumer_durable: true
+  max_deliver: 5
+  ack_wait: "30s"
+  max_ack_pending: 20
+  
+  # Scheduler Configuration
+  thread_pool_max_workers: 8
+  enable_parallel_dispatch: true
+  consume_interval_seconds: "3s"
+
+# Production NATS KV configuration example (commented out)
+# mem_scheduler:
+#   enabled: true
+#   
+#   # NATS Cluster Configuration
+#   nats_urls: 
+#     - "nats://nats-1.example.com:4222"
+#     - "nats://nats-2.example.com:4222"
+#     - "nats://nats-3.example.com:4222"
+#   nats_username: "memgos"
+#   nats_password: "${NATS_PASSWORD}"
+#   nats_max_reconnect: 50
+#   
+#   # Production NATS KV Configuration
+#   use_nats_kv: true
+#   nats_kv_bucket_name: "memgos-prod-scheduler"
+#   nats_kv_description: "MemGOS Production Scheduler Key-Value Store"
+#   nats_kv_max_value_size: 10485760    # 10MB
+#   nats_kv_history: 50                 # Keep 50 revisions
+#   nats_kv_max_bytes: 107374182400     # 100GB
+#   nats_kv_storage: "File"
+#   nats_kv_replicas: 3                 # 3 replicas for high availability
+#   
+#   # Production JetStream Configuration
+#   stream_name: "PROD_SCHEDULER_STREAM"
+#   stream_subjects: ["scheduler.>"]
+#   consumer_name: "prod_scheduler_consumer"
+#   consumer_durable: true
+#   max_deliver: 10
+#   ack_wait: "60s"
+#   max_ack_pending: 100
+#   
+#   # Production Scheduler Configuration
+#   thread_pool_max_workers: 16
+#   enable_parallel_dispatch: true
+#   consume_interval_seconds: "1s"

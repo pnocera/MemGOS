@@ -27,6 +27,7 @@ require (
 
 	// Graph database dependencies
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.1
+	github.com/kuzudb/go-kuzu v0.10.0
 	github.com/sashabaranov/go-openai v1.40.4
 
 	// Configuration and validation
@@ -87,6 +88,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect

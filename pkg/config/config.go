@@ -302,31 +302,132 @@ func NewMemCubeConfig() *MemCubeConfig {
 
 // SchedulerConfig represents scheduler configuration
 type SchedulerConfig struct {
-	BaseConfig      `yaml:",inline"`
-	Enabled         bool              `yaml:"enabled" json:"enabled"`
-	RedisHost       string            `yaml:"redis_host,omitempty" json:"redis_host,omitempty"`
-	RedisPort       int               `yaml:"redis_port,omitempty" json:"redis_port,omitempty"`
-	RedisPassword   string            `yaml:"redis_password,omitempty" json:"redis_password,omitempty"`
-	RedisDB         int               `yaml:"redis_db,omitempty" json:"redis_db,omitempty"`
-	WorkerCount     int               `yaml:"worker_count,omitempty" json:"worker_count,omitempty"`
-	QueueSize       int               `yaml:"queue_size,omitempty" json:"queue_size,omitempty"`
-	RetryAttempts   int               `yaml:"retry_attempts,omitempty" json:"retry_attempts,omitempty"`
-	RetryDelay      time.Duration     `yaml:"retry_delay,omitempty" json:"retry_delay,omitempty"`
+	BaseConfig           `yaml:",inline"`
+	Enabled              bool              `yaml:"enabled" json:"enabled"`
+	
+	// NATS Configuration
+	NATSURLs             []string          `yaml:"nats_urls,omitempty" json:"nats_urls,omitempty"`
+	NATSUsername         string            `yaml:"nats_username,omitempty" json:"nats_username,omitempty"`
+	NATSPassword         string            `yaml:"nats_password,omitempty" json:"nats_password,omitempty"`
+	NATSToken            string            `yaml:"nats_token,omitempty" json:"nats_token,omitempty"`
+	NATSMaxReconnect     int               `yaml:"nats_max_reconnect,omitempty" json:"nats_max_reconnect,omitempty"`
+	
+	// NATS KV Configuration
+	UseNATSKV            bool              `yaml:"use_nats_kv" json:"use_nats_kv"`
+	NATSKVBucketName     string            `yaml:"nats_kv_bucket_name,omitempty" json:"nats_kv_bucket_name,omitempty"`
+	NATSKVDescription    string            `yaml:"nats_kv_description,omitempty" json:"nats_kv_description,omitempty"`
+	NATSKVMaxValueSize   int32             `yaml:"nats_kv_max_value_size,omitempty" json:"nats_kv_max_value_size,omitempty"`
+	NATSKVHistory        uint8             `yaml:"nats_kv_history,omitempty" json:"nats_kv_history,omitempty"`
+	NATSKVMaxBytes       int64             `yaml:"nats_kv_max_bytes,omitempty" json:"nats_kv_max_bytes,omitempty"`
+	NATSKVStorage        string            `yaml:"nats_kv_storage,omitempty" json:"nats_kv_storage,omitempty"`
+	NATSKVReplicas       int               `yaml:"nats_kv_replicas,omitempty" json:"nats_kv_replicas,omitempty"`
+	
+	// JetStream Configuration
+	StreamName           string            `yaml:"stream_name,omitempty" json:"stream_name,omitempty"`
+	StreamSubjects       []string          `yaml:"stream_subjects,omitempty" json:"stream_subjects,omitempty"`
+	ConsumerName         string            `yaml:"consumer_name,omitempty" json:"consumer_name,omitempty"`
+	ConsumerDurable      bool              `yaml:"consumer_durable" json:"consumer_durable"`
+	MaxDeliver           int               `yaml:"max_deliver,omitempty" json:"max_deliver,omitempty"`
+	AckWait              time.Duration     `yaml:"ack_wait,omitempty" json:"ack_wait,omitempty"`
+	MaxAckPending        int               `yaml:"max_ack_pending,omitempty" json:"max_ack_pending,omitempty"`
+	
+	// Scheduler Configuration
+	ThreadPoolMaxWorkers int               `yaml:"thread_pool_max_workers,omitempty" json:"thread_pool_max_workers,omitempty"`
+	EnableParallelDispatch bool            `yaml:"enable_parallel_dispatch" json:"enable_parallel_dispatch"`
+	ConsumeIntervalSeconds time.Duration   `yaml:"consume_interval_seconds,omitempty" json:"consume_interval_seconds,omitempty"`
 }
 
 // NewSchedulerConfig creates a new scheduler configuration
 func NewSchedulerConfig() *SchedulerConfig {
 	return &SchedulerConfig{
-		BaseConfig:    *NewBaseConfig(),
-		Enabled:       false,
-		RedisHost:     "localhost",
-		RedisPort:     6379,
-		RedisDB:       0,
-		WorkerCount:   4,
-		QueueSize:     1000,
-		RetryAttempts: 3,
-		RetryDelay:    5 * time.Second,
+		BaseConfig:               *NewBaseConfig(),
+		Enabled:                  false,
+		
+		// NATS Configuration
+		NATSURLs:                 []string{"nats://localhost:4222"},
+		NATSMaxReconnect:         10,
+		
+		// NATS KV Configuration
+		UseNATSKV:                true,
+		NATSKVBucketName:         "memgos-scheduler",
+		NATSKVDescription:        "MemGOS Scheduler Key-Value Store",
+		NATSKVMaxValueSize:       1024 * 1024, // 1MB
+		NATSKVHistory:            10,
+		NATSKVMaxBytes:           1024 * 1024 * 1024, // 1GB
+		NATSKVStorage:            "File",
+		NATSKVReplicas:           1,
+		
+		// JetStream Configuration
+		StreamName:               "SCHEDULER_STREAM",
+		StreamSubjects:           []string{"scheduler.>"},
+		ConsumerName:             "scheduler_consumer",
+		ConsumerDurable:          true,
+		MaxDeliver:               3,
+		AckWait:                  10 * time.Second,
+		MaxAckPending:            10,
+		
+		// Scheduler Configuration
+		ThreadPoolMaxWorkers:     4,
+		EnableParallelDispatch:   false,
+		ConsumeIntervalSeconds:   5 * time.Second,
 	}
+}
+
+// ToSchedulerConfigMap converts SchedulerConfig to a map for the scheduler factory
+func (sc *SchedulerConfig) ToSchedulerConfigMap() map[string]interface{} {
+	configMap := map[string]interface{}{
+		"thread_pool_max_workers":   sc.ThreadPoolMaxWorkers,
+		"enable_parallel_dispatch":  sc.EnableParallelDispatch,
+		"consume_interval_seconds":  sc.ConsumeIntervalSeconds,
+		"use_nats_kv":              sc.UseNATSKV,
+	}
+	
+	// NATS configuration
+	natsConfig := map[string]interface{}{
+		"urls":         sc.NATSURLs,
+		"username":     sc.NATSUsername,
+		"password":     sc.NATSPassword,
+		"token":        sc.NATSToken,
+		"max_reconnect": sc.NATSMaxReconnect,
+		"jetstream_config": map[string]interface{}{
+			"stream_name":        sc.StreamName,
+			"stream_subjects":    sc.StreamSubjects,
+			"consumer_name":      sc.ConsumerName,
+			"consumer_durable":   sc.ConsumerDurable,
+			"max_deliver":        sc.MaxDeliver,
+			"ack_wait":           sc.AckWait,
+			"max_ack_pending":    sc.MaxAckPending,
+			"replicas":           sc.NATSKVReplicas,
+		},
+	}
+	configMap["nats_config"] = natsConfig
+	
+	// NATS KV configuration
+	if sc.UseNATSKV {
+		natsKVConfig := map[string]interface{}{
+			"urls":            sc.NATSURLs,
+			"username":        sc.NATSUsername,
+			"password":        sc.NATSPassword,
+			"token":           sc.NATSToken,
+			"bucket_name":     sc.NATSKVBucketName,
+			"description":     sc.NATSKVDescription,
+			"max_value_size":  sc.NATSKVMaxValueSize,
+			"history":         sc.NATSKVHistory,
+			"max_bytes":       sc.NATSKVMaxBytes,
+			"storage":         sc.NATSKVStorage,
+			"replicas":        sc.NATSKVReplicas,
+			"stream_name":     sc.StreamName,
+			"stream_subjects": sc.StreamSubjects,
+			"consumer_name":   sc.ConsumerName,
+			"consumer_durable": sc.ConsumerDurable,
+			"max_deliver":     sc.MaxDeliver,
+			"ack_wait":        sc.AckWait,
+			"max_ack_pending": sc.MaxAckPending,
+		}
+		configMap["nats_kv_config"] = natsKVConfig
+	}
+	
+	return configMap
 }
 
 // MOSConfig represents the main MOS configuration

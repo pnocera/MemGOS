@@ -31,8 +31,11 @@ MemGOS is a comprehensive Go 1.24 implementation of the Memory Operating System 
 
 ### Database Support
 - **Vector DBs**: Qdrant for high-performance vector search
-- **Graph DBs**: Neo4j for relationship modeling
-- **Cache**: Redis for distributed caching
+- **Graph DBs**: 
+  - **KuzuDB** (Default): High-performance embedded graph database with 10-100x better performance
+  - **Neo4j**: Traditional server-based graph database for distributed deployments
+- **Message & KV Store**: NATS.io with JetStream for messaging and key-value storage
+- **Cache**: Redis for distributed caching (being phased out in favor of NATS KV)
 
 ## 📦 Installation
 
@@ -65,10 +68,14 @@ docker-compose up -d
 
 **📋 Complete Docker Setup Guide**: [docs/docker/README.md](docs/docker/README.md)
 
+The Docker setup includes NATS.io with JetStream for high-performance messaging and key-value storage, replacing Redis for better performance and simplified architecture.
+
 ## 🚀 Quick Start
 
 ### 1. Basic Configuration
 Create a configuration file `config.yaml`:
+
+> 📋 **More Examples**: See [examples/config/](examples/config/) for complete configuration examples including NATS KV setup, API server configuration, and production deployment templates.
 
 ```yaml
 user_id: "your-user-id"
@@ -89,6 +96,31 @@ mem_reader:
     backend: "openai"
     model: "text-embedding-ada-002"
     api_key: "${OPENAI_API_KEY}"
+
+# Graph database configuration (KuzuDB default)
+graph_db:
+  provider: "kuzu"
+  kuzu_config:
+    database_path: "./data/kuzu_db"
+    buffer_pool_size: 1073741824  # 1GB
+    max_num_threads: 4
+    enable_compression: true
+    
+# Alternative: Neo4j configuration
+# graph_db:
+#   provider: "neo4j"
+#   uri: "bolt://localhost:7687"
+#   username: "neo4j"
+#   password: "password"
+
+# Optional: Enable memory scheduler with NATS KV
+enable_mem_scheduler: true
+mem_scheduler:
+  enabled: true
+  use_nats_kv: true
+  nats_urls: ["nats://localhost:4222"]
+  nats_kv_bucket_name: "memgos-scheduler"
+  thread_pool_max_workers: 4
 ```
 
 ### 2. Initialize and Use
@@ -269,7 +301,7 @@ memgos/
 │   ├── llm/             # LLM integrations
 │   ├── embedders/       # Embedding providers
 │   ├── vectordb/        # Vector databases
-│   ├── graphdb/         # Graph databases
+│   ├── graphdb/         # Graph databases (KuzuDB + Neo4j)
 │   ├── parsers/         # Document parsers
 │   ├── schedulers/      # Memory schedulers
 │   ├── users/           # User management and authentication
@@ -301,6 +333,14 @@ memgos/
 - **User Management**: User registration, authentication, and authorization
 - **Memory Operations**: CRUD operations for all memory types
 - **Token Management**: API token creation, listing, and revocation
+
+#### Memory Scheduler System
+- **NATS KV Integration**: High-performance key-value store with NATS.io JetStream
+- **Distributed Architecture**: Scalable message queuing and processing
+- **Atomic Operations**: ACID-compliant key-value operations with revision tracking
+- **Watch Capabilities**: Real-time notifications for key changes
+- **Clustering Support**: Built-in clustering and replication for high availability
+- **Performance Optimized**: Native Go implementation with concurrent processing
 
 #### MCP Server
 - **Protocol Implementation**: Full Model Context Protocol server
@@ -361,6 +401,7 @@ memgos/
 - **Memory Usage**: 75% less than Python MemOS
 - **Startup Time**: 30x faster than Python implementation
 - **Concurrency**: Full thread-safety supporting 200+ concurrent users
+- **Graph Database**: 10-100x faster queries with KuzuDB embedded architecture
 
 ### Benchmark Results vs Python MemOS
 | Metric | Python MemOS | Go MemGOS | Improvement |
@@ -376,6 +417,8 @@ memgos/
 - Connection pooling for database operations
 - Memory pooling for frequent allocations
 - Optimized garbage collection tuning
+- **Embedded KuzuDB**: Zero network latency with columnar storage and vectorized execution
+- **Multi-provider Graph DB**: Choose between KuzuDB (performance) and Neo4j (distributed)
 
 *For detailed performance analysis, see [Performance Analysis](docs/PERFORMANCE_ANALYSIS.md)*
 
@@ -444,6 +487,7 @@ make dev-test
 - [**Memory Systems**](pkg/memory/README.md) - Memory backend implementations
 - [**LLM Integrations**](pkg/llm/README.md) - Language model integrations
 - [**Vector Databases**](pkg/vectordb/README.md) - Vector database backends
+- [**Graph Databases**](pkg/graphdb/README.md) - KuzuDB and Neo4j implementations
 
 ## 🤝 Contributing
 

@@ -3,6 +3,7 @@ package schedulers
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/memtensor/memgos/pkg/interfaces"
 	"github.com/memtensor/memgos/pkg/logger"
@@ -238,6 +239,22 @@ func (f *SchedulerFactory) extractBaseConfigFromMap(configMap map[string]interfa
 		}
 	}
 	
+	// Extract NATS KV configuration
+	if natsKVConfig, ok := configMap["nats_kv_config"]; ok {
+		if natsKVMap, ok := natsKVConfig.(map[string]interface{}); ok {
+			if natsKV, err := f.extractNATSKVConfigFromMap(natsKVMap); err == nil {
+				config.NATSKVConfig = natsKV
+			}
+		}
+	}
+	
+	// Extract UseNATSKV flag
+	if useNATSKV, ok := configMap["use_nats_kv"]; ok {
+		if use, ok := useNATSKV.(bool); ok {
+			config.UseNATSKV = use
+		}
+	}
+	
 	return config, nil
 }
 
@@ -346,6 +363,140 @@ func (f *SchedulerFactory) extractJetStreamConfigFromMap(configMap map[string]in
 			config.Replicas = r
 		} else if r, ok := replicas.(float64); ok {
 			config.Replicas = int(r)
+		}
+	}
+	
+	return config, nil
+}
+
+// extractNATSKVConfigFromMap extracts NATS KV configuration from a map
+func (f *SchedulerFactory) extractNATSKVConfigFromMap(configMap map[string]interface{}) (*modules.NATSKVConfig, error) {
+	config := modules.DefaultNATSKVConfig()
+	
+	if urls, ok := configMap["urls"]; ok {
+		if urlSlice, ok := urls.([]interface{}); ok {
+			urlStrings := make([]string, 0, len(urlSlice))
+			for _, url := range urlSlice {
+				if urlStr, ok := url.(string); ok {
+					urlStrings = append(urlStrings, urlStr)
+				}
+			}
+			if len(urlStrings) > 0 {
+				config.URLs = urlStrings
+			}
+		}
+	}
+	
+	if bucketName, ok := configMap["bucket_name"]; ok {
+		if bn, ok := bucketName.(string); ok {
+			config.BucketName = bn
+		}
+	}
+	
+	if description, ok := configMap["description"]; ok {
+		if desc, ok := description.(string); ok {
+			config.Description = desc
+		}
+	}
+	
+	if maxValueSize, ok := configMap["max_value_size"]; ok {
+		if mvs, ok := maxValueSize.(int); ok {
+			config.MaxValueSize = int32(mvs)
+		} else if mvs, ok := maxValueSize.(float64); ok {
+			config.MaxValueSize = int32(mvs)
+		}
+	}
+	
+	if history, ok := configMap["history"]; ok {
+		if h, ok := history.(int); ok {
+			config.History = uint8(h)
+		} else if h, ok := history.(float64); ok {
+			config.History = uint8(h)
+		}
+	}
+	
+	if maxBytes, ok := configMap["max_bytes"]; ok {
+		if mb, ok := maxBytes.(int); ok {
+			config.MaxBytes = int64(mb)
+		} else if mb, ok := maxBytes.(float64); ok {
+			config.MaxBytes = int64(mb)
+		}
+	}
+	
+	if storage, ok := configMap["storage"]; ok {
+		if s, ok := storage.(string); ok {
+			config.Storage = s
+		}
+	}
+	
+	if replicas, ok := configMap["replicas"]; ok {
+		if r, ok := replicas.(int); ok {
+			config.Replicas = r
+		} else if r, ok := replicas.(float64); ok {
+			config.Replicas = int(r)
+		}
+	}
+	
+	if streamName, ok := configMap["stream_name"]; ok {
+		if sn, ok := streamName.(string); ok {
+			config.StreamName = sn
+		}
+	}
+	
+	if streamSubjects, ok := configMap["stream_subjects"]; ok {
+		if subjectSlice, ok := streamSubjects.([]interface{}); ok {
+			subjectStrings := make([]string, 0, len(subjectSlice))
+			for _, subject := range subjectSlice {
+				if subjectStr, ok := subject.(string); ok {
+					subjectStrings = append(subjectStrings, subjectStr)
+				}
+			}
+			if len(subjectStrings) > 0 {
+				config.StreamSubjects = subjectStrings
+			}
+		}
+	}
+	
+	if consumerName, ok := configMap["consumer_name"]; ok {
+		if cn, ok := consumerName.(string); ok {
+			config.ConsumerName = cn
+		}
+	}
+	
+	if consumerDurable, ok := configMap["consumer_durable"]; ok {
+		if cd, ok := consumerDurable.(bool); ok {
+			config.ConsumerDurable = cd
+		}
+	}
+	
+	if maxDeliver, ok := configMap["max_deliver"]; ok {
+		if md, ok := maxDeliver.(int); ok {
+			config.MaxDeliver = md
+		} else if md, ok := maxDeliver.(float64); ok {
+			config.MaxDeliver = int(md)
+		}
+	}
+	
+	if maxAckPending, ok := configMap["max_ack_pending"]; ok {
+		if map_, ok := maxAckPending.(int); ok {
+			config.MaxAckPending = map_
+		} else if map_, ok := maxAckPending.(float64); ok {
+			config.MaxAckPending = int(map_)
+		}
+	}
+	
+	if ackWait, ok := configMap["ack_wait"]; ok {
+		if aw, ok := ackWait.(string); ok {
+			// Parse duration string (e.g., "10s", "1m", "30s")
+			if duration, err := time.ParseDuration(aw); err == nil {
+				config.AckWait = duration
+			}
+		} else if aw, ok := ackWait.(int); ok {
+			// Assume seconds if integer
+			config.AckWait = time.Duration(aw) * time.Second
+		} else if aw, ok := ackWait.(float64); ok {
+			// Assume seconds if float
+			config.AckWait = time.Duration(aw) * time.Second
 		}
 	}
 	

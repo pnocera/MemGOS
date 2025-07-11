@@ -13,6 +13,10 @@ services:
     environment:
       - MEMGOS_LOG_LEVEL=info
       - MEMGOS_API_PORT=8080
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -35,6 +39,7 @@ services:
       - MEMGOS_API_URL=http://memgos:8080
       - MEMGOS_USER_ID=default-user
       - MEMGOS_SESSION_ID=mcp-session
+      - NATS_URL=nats://nats:4222
     volumes:
       - ./logs:/app/logs
     stdin_open: true
@@ -42,16 +47,32 @@ services:
     networks:
       - memgos-network
 
-  # Optional: Redis for caching (if needed)
-  redis:
-    image: redis:7-alpine
-    container_name: memgos-redis
+  # NATS server for messaging and key-value store
+  nats:
+    image: nats:2.10-alpine
+    container_name: memgos-nats
     ports:
-      - "6379:6379"
+      - "4222:4222"    # NATS client connections
+      - "8222:8222"    # HTTP monitoring
+      - "6222:6222"    # Clustering
+    command: >
+      --jetstream
+      --store_dir=/data
+      --http_port=8222
+      --cluster_name=memgos-cluster
+      --cluster=nats://0.0.0.0:6222
+      --max_file_store=1GB
+      --max_mem_store=256MB
     volumes:
-      - redis_data:/data
+      - nats_data:/data
     networks:
       - memgos-network
+    healthcheck:
+      test: ["CMD", "nats", "server", "check", "--server=nats://localhost:4222"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Optional: Qdrant for vector database (if needed)
   qdrant:
@@ -70,5 +91,5 @@ networks:
     driver: bridge
 
 volumes:
-  redis_data:
+  nats_data:
   qdrant_data:

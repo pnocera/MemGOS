@@ -1,0 +1,105 @@
+# MemGOS Configuration with KuzuDB Graph Database
+# This example shows how to configure MemGOS to use KuzuDB as the graph database
+
+user_id: "example-user"
+session_id: "session-001"
+enable_textual_memory: true
+enable_activation_memory: false
+enable_parametric_memory: false
+
+# Chat model configuration
+chat_model:
+  backend: "openai"
+  model: "gpt-3.5-turbo"
+  api_key: "${OPENAI_API_KEY}"
+
+# Memory reader configuration
+mem_reader:
+  backend: "general"
+  memory_filename: "textual_memory.json"
+  embedder:
+    backend: "openai"
+    model: "text-embedding-ada-002"
+    api_key: "${OPENAI_API_KEY}"
+
+# KuzuDB Graph Database Configuration (Default)
+graph_db:
+  provider: "kuzu"
+  # Connection settings
+  max_conn_pool: 1  # KuzuDB is embedded, single connection
+  conn_timeout: "30s"
+  read_timeout: "15s"
+  write_timeout: "15s"
+  retry_attempts: 3
+  retry_delay: "1s"
+  metrics: true
+  logging: false
+  
+  # KuzuDB-specific configuration
+  kuzu_config:
+    # Database file path (will be created if doesn't exist)
+    database_path: "./data/kuzu_graph.db"
+    
+    # Read-only mode (false for write operations)
+    read_only: false
+    
+    # Buffer pool size in bytes (1GB recommended for development)
+    # For production, use 60-80% of available RAM
+    buffer_pool_size: 1073741824  # 1GB
+    
+    # Maximum number of threads for query execution
+    # Recommended: number of CPU cores
+    max_num_threads: 4
+    
+    # Enable data compression for storage efficiency
+    enable_compression: true
+    
+    # Query timeout in seconds
+    timeout_seconds: 30
+
+# Vector database configuration
+vector_db:
+  backend: "qdrant"
+  url: "http://localhost:6333"
+  collection_name: "memgos_vectors"
+
+# Memory scheduler with NATS KV
+enable_mem_scheduler: true
+mem_scheduler:
+  enabled: true
+  use_nats_kv: true
+  nats_urls: ["nats://localhost:4222"]
+  nats_kv_bucket_name: "memgos-scheduler"
+  thread_pool_max_workers: 4
+
+# API server configuration
+api_server:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  cors_enabled: true
+  rate_limit_enabled: true
+  rate_limit_requests_per_minute: 1000
+
+# Authentication configuration
+auth:
+  jwt_secret: "${JWT_SECRET}"
+  jwt_expiration_hours: 24
+  api_tokens_enabled: true
+  
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+# Performance tuning
+performance:
+  # Memory allocation optimizations
+  gc_percent: 100
+  max_goroutines: 1000
+  
+  # Query caching
+  query_cache_enabled: true
+  query_cache_size: 1000
+  query_cache_ttl: "10m"

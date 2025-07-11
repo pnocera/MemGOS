@@ -148,19 +148,25 @@ volumes:
 
 ## 🔗 Service Integration
 
-### With Redis (Caching)
+### With NATS (Messaging & Key-Value Store)
 
 ```yaml
 services:
   memgos:
     # ... main config
     environment:
-      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
 
-  redis:
-    image: redis:7-alpine
+  nats:
+    image: nats:2.10-alpine
+    command: >
+      --jetstream
+      --store_dir=/data
+      --http_port=8222
+      --max_file_store=1GB
+      --max_mem_store=256MB
     volumes:
-      - redis_data:/data
+      - nats_data:/data
 ```
 
 ### With Qdrant (Vector Database)
@@ -316,8 +322,9 @@ services:
       - "8080:8080"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NATS_URL=nats://nats:4222
     depends_on:
-      - redis
+      - nats
       - qdrant
 
   memgos-mcp:
@@ -328,11 +335,18 @@ services:
     environment:
       - MEMGOS_API_TOKEN=${MEMGOS_API_TOKEN}
       - MEMGOS_API_URL=http://memgos:8080
+      - NATS_URL=nats://nats:4222
 
-  redis:
-    image: redis:7-alpine
+  nats:
+    image: nats:2.10-alpine
+    command: >
+      --jetstream
+      --store_dir=/data
+      --http_port=8222
+      --max_file_store=1GB
+      --max_mem_store=256MB
     volumes:
-      - redis_data:/data
+      - nats_data:/data
 
   qdrant:
     image: qdrant/qdrant:v1.7.4
@@ -340,7 +354,7 @@ services:
       - qdrant_data:/qdrant/storage
 
 volumes:
-  redis_data:
+  nats_data:
   qdrant_data:
 ```
 

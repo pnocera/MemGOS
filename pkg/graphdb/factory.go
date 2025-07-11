@@ -34,6 +34,10 @@ func NewGraphDBFactory(logger interfaces.Logger, metrics interfaces.Metrics) *Gr
 	factory.RegisterProvider(ProviderNeo4j, func(config *GraphDBConfig, logger interfaces.Logger, metrics interfaces.Metrics) (ExtendedGraphDB, error) {
 		return NewNeo4jGraphDB(config, logger, metrics)
 	})
+	
+	factory.RegisterProvider(ProviderKuzu, func(config *GraphDBConfig, logger interfaces.Logger, metrics interfaces.Metrics) (ExtendedGraphDB, error) {
+		return NewKuzuGraphDB(config, logger, metrics)
+	})
 
 	return factory
 }

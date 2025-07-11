@@ -81,11 +81,34 @@ mem_reader:
 # Memory scheduler configuration
 mem_scheduler:
   enabled: true
-  redis_host: "localhost"
-  redis_port: 6379
-  redis_password: "${REDIS_PASSWORD}"
-  redis_db: 0
-  worker_count: 4
-  queue_size: 1000
-  retry_attempts: 3
-  retry_delay: "5s"
+  
+  # NATS Configuration
+  nats_urls: ["nats://localhost:4222"]
+  nats_username: ""
+  nats_password: "${NATS_PASSWORD}"
+  nats_token: ""
+  nats_max_reconnect: 10
+  
+  # NATS KV Configuration
+  use_nats_kv: true
+  nats_kv_bucket_name: "memgos-scheduler"
+  nats_kv_description: "MemGOS Scheduler Key-Value Store"
+  nats_kv_max_value_size: 1048576  # 1MB
+  nats_kv_history: 10
+  nats_kv_max_bytes: 1073741824    # 1GB
+  nats_kv_storage: "File"
+  nats_kv_replicas: 1
+  
+  # JetStream Configuration
+  stream_name: "SCHEDULER_STREAM"
+  stream_subjects: ["scheduler.>"]
+  consumer_name: "scheduler_consumer"
+  consumer_durable: true
+  max_deliver: 3
+  ack_wait: "10s"
+  max_ack_pending: 10
+  
+  # Scheduler Configuration
+  thread_pool_max_workers: 4
+  enable_parallel_dispatch: false
+  consume_interval_seconds: "5s"

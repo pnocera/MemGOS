@@ -79,21 +79,59 @@ func (cm *ConfigManager) setDefaults(config *GraphDBConfig) {
 	if config.Provider == "" {
 		config.Provider = ProviderNeo4j
 	}
-	if config.URI == "" {
-		config.URI = "bolt://localhost:7687"
+	
+	// Provider-specific defaults
+	switch config.Provider {
+	case ProviderNeo4j:
+		if config.URI == "" {
+			config.URI = "bolt://localhost:7687"
+		}
+		if config.Username == "" {
+			config.Username = "neo4j"
+		}
+		if config.Password == "" {
+			config.Password = "password"
+		}
+		if config.Database == "" {
+			config.Database = "neo4j"
+		}
+		if config.MaxConnPool == 0 {
+			config.MaxConnPool = 50
+		}
+		if config.SSLMode == "" {
+			config.SSLMode = "disable"
+		}
+	case ProviderKuzu:
+		if config.KuzuConfig == nil {
+			config.KuzuConfig = &KuzuDBConfig{
+				DatabasePath:      "./kuzu_data",
+				ReadOnly:          false,
+				BufferPoolSize:    1024 * 1024 * 1024, // 1GB
+				MaxNumThreads:     4,
+				EnableCompression: true,
+				TimeoutSeconds:    30,
+			}
+		} else {
+			// Set individual defaults for KuzuDB config
+			if config.KuzuConfig.DatabasePath == "" {
+				config.KuzuConfig.DatabasePath = "./kuzu_data"
+			}
+			if config.KuzuConfig.BufferPoolSize == 0 {
+				config.KuzuConfig.BufferPoolSize = 1024 * 1024 * 1024 // 1GB
+			}
+			if config.KuzuConfig.MaxNumThreads == 0 {
+				config.KuzuConfig.MaxNumThreads = 4
+			}
+			if config.KuzuConfig.TimeoutSeconds == 0 {
+				config.KuzuConfig.TimeoutSeconds = 30
+			}
+		}
+		if config.MaxConnPool == 0 {
+			config.MaxConnPool = 1 // KuzuDB is embedded, single connection
+		}
 	}
-	if config.Username == "" {
-		config.Username = "neo4j"
-	}
-	if config.Password == "" {
-		config.Password = "password"
-	}
-	if config.Database == "" {
-		config.Database = "neo4j"
-	}
-	if config.MaxConnPool == 0 {
-		config.MaxConnPool = 50
-	}
+	
+	// Common defaults
 	if config.ConnTimeout == 0 {
 		config.ConnTimeout = 30 * time.Second
 	}
@@ -108,9 +146,6 @@ func (cm *ConfigManager) setDefaults(config *GraphDBConfig) {
 	}
 	if config.RetryDelay == 0 {
 		config.RetryDelay = time.Second
-	}
-	if config.SSLMode == "" {
-		config.SSLMode = "disable"
 	}
 }
 
@@ -145,16 +180,36 @@ func (cm *ConfigManager) ValidateConfig(config *GraphDBConfig) error {
 		return fmt.Errorf("provider is required")
 	}
 
-	if config.URI == "" {
-		return fmt.Errorf("URI is required")
-	}
-
-	if config.Username == "" {
-		return fmt.Errorf("username is required")
-	}
-
-	if config.Password == "" {
-		return fmt.Errorf("password is required")
+	// Provider-specific validation
+	switch config.Provider {
+	case ProviderNeo4j:
+		if config.URI == "" {
+			return fmt.Errorf("URI is required for Neo4j")
+		}
+		if config.Username == "" {
+			return fmt.Errorf("username is required for Neo4j")
+		}
+		if config.Password == "" {
+			return fmt.Errorf("password is required for Neo4j")
+		}
+	case ProviderKuzu:
+		if config.KuzuConfig == nil {
+			return fmt.Errorf("KuzuDB configuration is required")
+		}
+		if config.KuzuConfig.DatabasePath == "" {
+			return fmt.Errorf("database path is required for KuzuDB")
+		}
+		if config.KuzuConfig.BufferPoolSize <= 0 {
+			return fmt.Errorf("buffer pool size must be positive for KuzuDB")
+		}
+		if config.KuzuConfig.MaxNumThreads <= 0 {
+			return fmt.Errorf("max number of threads must be positive for KuzuDB")
+		}
+		if config.KuzuConfig.TimeoutSeconds <= 0 {
+			return fmt.Errorf("timeout seconds must be positive for KuzuDB")
+		}
+	default:
+		return fmt.Errorf("unsupported provider: %s", config.Provider)
 	}
 
 	if config.MaxConnPool <= 0 {

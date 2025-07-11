@@ -13,10 +13,12 @@ import (
 
 // BaseSchedulerConfig holds configuration for the base scheduler
 type BaseSchedulerConfig struct {
-	ThreadPoolMaxWorkers     int           `json:"thread_pool_max_workers" yaml:"thread_pool_max_workers"`
-	EnableParallelDispatch   bool          `json:"enable_parallel_dispatch" yaml:"enable_parallel_dispatch"`
-	ConsumeIntervalSeconds   time.Duration `json:"consume_interval_seconds" yaml:"consume_interval_seconds"`
-	NATSConfig               *NATSConfig   `json:"nats_config" yaml:"nats_config"`
+	ThreadPoolMaxWorkers     int                        `json:"thread_pool_max_workers" yaml:"thread_pool_max_workers"`
+	EnableParallelDispatch   bool                       `json:"enable_parallel_dispatch" yaml:"enable_parallel_dispatch"`
+	ConsumeIntervalSeconds   time.Duration              `json:"consume_interval_seconds" yaml:"consume_interval_seconds"`
+	NATSConfig               *NATSConfig                `json:"nats_config" yaml:"nats_config"`
+	NATSKVConfig             *modules.NATSKVConfig      `json:"nats_kv_config" yaml:"nats_kv_config"`
+	UseNATSKV                bool                       `json:"use_nats_kv" yaml:"use_nats_kv"`
 }
 
 // DefaultBaseSchedulerConfig returns default base scheduler configuration
@@ -26,12 +28,15 @@ func DefaultBaseSchedulerConfig() *BaseSchedulerConfig {
 		EnableParallelDispatch: false,
 		ConsumeIntervalSeconds: modules.DefaultConsumeIntervalSeconds,
 		NATSConfig:             DefaultNATSConfig(),
+		NATSKVConfig:           modules.DefaultNATSKVConfig(),
+		UseNATSKV:              true, // Default to NATS KV for new installations
 	}
 }
 
 // BaseScheduler provides the foundation for all memory schedulers
 type BaseScheduler struct {
 	*NATSSchedulerModule
+	natsKVModule          *modules.NATSKVSchedulerModule
 	mu                    sync.RWMutex
 	config                *BaseSchedulerConfig
 	maxWorkers            int
@@ -82,6 +87,11 @@ func NewBaseScheduler(config *BaseSchedulerConfig) *BaseScheduler {
 		startTime:              time.Now(),
 	}
 	
+	// Initialize NATS KV module if enabled
+	if config.UseNATSKV {
+		scheduler.natsKVModule = modules.NewNATSKVSchedulerModule(config.NATSKVConfig)
+	}
+	
 	// Initialize dispatcher
 	scheduler.dispatcher = modules.NewSchedulerDispatcher(
 		scheduler.maxWorkers,
@@ -112,10 +122,23 @@ func (b *BaseScheduler) InitializeModules(chatLLM interfaces.LLM) error {
 		// Continue without NATS - scheduler can work in local mode
 	}
 	
+	// Initialize NATS KV module if enabled
+	if b.config.UseNATSKV && b.natsKVModule != nil {
+		if err := b.natsKVModule.InitializeNATSKV(); err != nil {
+			b.logger.Warn("Failed to initialize NATS KV", map[string]interface{}{"error": err.Error()})
+			// Continue without NATS KV - scheduler can work with regular NATS or local mode
+		} else {
+			b.logger.Info("NATS KV module initialized successfully", map[string]interface{}{
+				"bucket_name": b.config.NATSKVConfig.BucketName,
+				"use_nats_kv": b.config.UseNATSKV})
+		}
+	}
+	
 	b.logger.Info("Base scheduler modules initialized", map[string]interface{}{
 		"max_workers": b.maxWorkers,
 		"parallel_dispatch": b.enableParallelDispatch,
-		"consume_interval": b.consumeInterval})
+		"consume_interval": b.consumeInterval,
+		"nats_kv_enabled": b.config.UseNATSKV})
 	
 	return nil
 }
@@ -278,6 +301,13 @@ func (b *BaseScheduler) Stop() error {
 		b.logger.Error("Failed to stop NATS listener", err)
 	}
 	
+	// Close NATS KV module if enabled
+	if b.config.UseNATSKV && b.natsKVModule != nil {
+		if err := b.natsKVModule.Close(); err != nil {
+			b.logger.Error("Failed to close NATS KV module", err)
+		}
+	}
+	
 	// Close NATS connection
 	if err := b.Close(); err != nil {
 		b.logger.Error("Failed to close NATS connection", err)
@@ -323,6 +353,11 @@ func (b *BaseScheduler) GetStats() map[string]interface{} {
 	// Add retriever cache stats
 	if b.retriever != nil {
 		stats["retriever_cache"] = b.retriever.GetCacheStats()
+	}
+	
+	// Add NATS KV stats if enabled
+	if b.config.UseNATSKV && b.natsKVModule != nil {
+		stats["nats_kv"] = b.natsKVModule.GetStats()
 	}
 	
 	return stats
@@ -373,6 +408,13 @@ func (b *BaseScheduler) GetDispatcher() *modules.SchedulerDispatcher {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.dispatcher
+}
+
+// GetNATSKVModule returns the NATS KV module (if enabled)
+func (b *BaseScheduler) GetNATSKVModule() *modules.NATSKVSchedulerModule {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.natsKVModule
 }
 
 // CreateAutofilledLogItem creates a log item with current session context

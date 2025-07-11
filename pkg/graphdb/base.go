@@ -15,6 +15,7 @@ type GraphDBProvider string
 
 const (
 	ProviderNeo4j GraphDBProvider = "neo4j"
+	ProviderKuzu  GraphDBProvider = "kuzu"
 )
 
 // GraphDBConfig holds configuration for graph databases
@@ -34,6 +35,19 @@ type GraphDBConfig struct {
 	Logging       bool                  `json:"logging" yaml:"logging"`
 	SSLMode       string                `json:"ssl_mode" yaml:"ssl_mode"`
 	TLSConfig     map[string]interface{} `json:"tls_config" yaml:"tls_config"`
+	
+	// KuzuDB-specific configuration
+	KuzuConfig    *KuzuDBConfig         `json:"kuzu_config,omitempty" yaml:"kuzu_config,omitempty"`
+}
+
+// KuzuDBConfig holds KuzuDB-specific configuration
+type KuzuDBConfig struct {
+	DatabasePath      string `json:"database_path" yaml:"database_path"`
+	ReadOnly          bool   `json:"read_only" yaml:"read_only"`
+	BufferPoolSize    int64  `json:"buffer_pool_size" yaml:"buffer_pool_size"`
+	MaxNumThreads     int    `json:"max_num_threads" yaml:"max_num_threads"`
+	EnableCompression bool   `json:"enable_compression" yaml:"enable_compression"`
+	TimeoutSeconds    int    `json:"timeout_seconds" yaml:"timeout_seconds"`
 }
 
 // DefaultGraphDBConfig returns a default configuration
@@ -53,6 +67,29 @@ func DefaultGraphDBConfig() *GraphDBConfig {
 		Metrics:      true,
 		Logging:      false,
 		SSLMode:      "disable",
+	}
+}
+
+// DefaultKuzuDBGraphDBConfig returns a default KuzuDB configuration
+func DefaultKuzuDBGraphDBConfig() *GraphDBConfig {
+	return &GraphDBConfig{
+		Provider:      ProviderKuzu,
+		MaxConnPool:   1, // KuzuDB is embedded, single connection
+		ConnTimeout:   30 * time.Second,
+		ReadTimeout:   15 * time.Second,
+		WriteTimeout:  15 * time.Second,
+		RetryAttempts: 3,
+		RetryDelay:    time.Second,
+		Metrics:       true,
+		Logging:       false,
+		KuzuConfig: &KuzuDBConfig{
+			DatabasePath:      "./kuzu_data",
+			ReadOnly:          false,
+			BufferPoolSize:    1024 * 1024 * 1024, // 1GB
+			MaxNumThreads:     4,
+			EnableCompression: true,
+			TimeoutSeconds:    30,
+		},
 	}
 }
 
